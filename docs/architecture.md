@@ -113,7 +113,7 @@ flowchart TB
     subgraph global["Global Tier"]
         direction TB
         g_desc["Public commons, community-governed\nHigh-confidence, broadly applicable\nAbstracted — no org-specific context"]
-        g_conf["847 confirmations across 312 orgs\nHITL review, staleness decay"]
+        g_conf["High confirmation count across diverse orgs\nHITL review, staleness decay"]
     end
 
     local -->|"Agent proposes generic insight\n(no org-specific references)"| team
@@ -193,7 +193,7 @@ flowchart TB
 
     subgraph distribution["Distribution"]
         skills_sh["skills.sh\nPackage manager for agent skills\nnpx skills add craic"]
-        plugins["Agent Plugin Systems\nClaude Code, OpenCode, Cursor\nOne-command install"]
+        plugins["Agent Plugin Systems\nClaude Code, OpenCode\nOne-command install"]
     end
 
     subgraph craic["CRAIC"]
@@ -213,6 +213,8 @@ flowchart TB
     skills_std --> craic_skill
     mcp_proto --> craic_mcp
     craic_skill --> skills_sh
+    craic_skill -->|"bundles"| craic_plugin
+    craic_mcp -->|"bundles"| craic_plugin
     craic_plugin --> plugins
     skills_sh --> agents
     plugins --> agents
