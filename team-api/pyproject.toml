@@ -1,0 +1,25 @@
+[project]
+name = "craic-team-api"
+version = "0.1.0"
+description = "CRAIC team API for shared agent learning"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+    "ruff",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["team_api"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

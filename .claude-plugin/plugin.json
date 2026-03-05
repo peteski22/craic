@@ -1,0 +1,14 @@
+{
+  "name": "craic",
+  "version": "0.1.0",
+  "description": "Collective Reciprocal Agent Intelligence Commons — shared agent learning",
+  "mcpServers": {
+    "craic": {
+      "command": "uv",
+      "args": ["run", "--directory", "server", "craic-mcp-server"],
+      "env": {
+        "CRAIC_TEAM_API_URL": "http://localhost:8742"
+      }
+    }
+  }
+}
