@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from .knowledge_unit import FlagReason, KnowledgeUnit
+from .knowledge_unit import Flag, FlagReason, KnowledgeUnit
 
 
 CONFIRMATION_BOOST = 0.1
@@ -31,16 +31,17 @@ def apply_confirmation(unit: KnowledgeUnit) -> KnowledgeUnit:
 
 
 def apply_flag(unit: KnowledgeUnit, reason: FlagReason) -> KnowledgeUnit:
-    """Reduce confidence by the flag penalty, floored at 0.0."""
-    _ = reason
+    """Reduce confidence and record the flag reason."""
     new_confidence = max(
         unit.evidence.confidence - FLAG_PENALTY, CONFIDENCE_FLOOR
     )
+    new_flag = Flag(reason=reason)
     return unit.model_copy(
         update={
             "evidence": unit.evidence.model_copy(
-                update={"confidence": new_confidence}
-            )
+                update={"confidence": round(new_confidence, 2)}
+            ),
+            "flags": [*unit.flags, new_flag],
         }
     )
 

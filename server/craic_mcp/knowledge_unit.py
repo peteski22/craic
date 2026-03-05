@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 
 from nanoid import generate
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 KU_ID_PREFIX = "ku_"
@@ -24,6 +24,13 @@ class FlagReason(str, Enum):
     DUPLICATE = "duplicate"
 
 
+class Flag(BaseModel):
+    """A recorded flag against a knowledge unit."""
+
+    reason: FlagReason
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class Insight(BaseModel):
     summary: str
     detail: str
@@ -37,26 +44,35 @@ class Context(BaseModel):
 
 
 class Evidence(BaseModel):
-    confidence: float = 0.5
+    """Evidence and confidence metrics for a knowledge unit."""
+
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     confirmations: int = 1
-    first_observed: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
-    last_confirmed: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    first_observed: datetime | None = None
+    last_confirmed: datetime | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_default_timestamps(cls, data: dict) -> dict:
+        """Ensure both timestamps are identical on creation."""
+        if isinstance(data, dict):
+            now = datetime.now(timezone.utc)
+            data.setdefault("first_observed", now)
+            data.setdefault("last_confirmed", now)
+        return data
 
 
 class KnowledgeUnit(BaseModel):
     id: str
     version: int = 1
-    domain: list[str]
+    domain: list[str] = Field(min_length=1)
     insight: Insight
     context: Context = Field(default_factory=Context)
     evidence: Evidence = Field(default_factory=Evidence)
     tier: Tier = Tier.LOCAL
     created_by: str = ""
     superseded_by: str | None = None
+    flags: list[Flag] = Field(default_factory=list)
 
 
 def _generate_ku_id() -> str:

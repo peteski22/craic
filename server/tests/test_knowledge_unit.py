@@ -2,8 +2,11 @@
 
 import pytest
 
+from pydantic import ValidationError
+
 from craic_mcp.knowledge_unit import (
     Context,
+    Evidence,
     FlagReason,
     Insight,
     KnowledgeUnit,
@@ -165,6 +168,87 @@ class TestCalculateRelevance:
             query_framework="flask",
         )
         assert 0.0 <= score <= 1.0
+
+
+class TestApplyFlagRecordsReason:
+    def test_records_single_flag(self):
+        unit = _make_unit()
+        flagged = apply_flag(unit, FlagReason.STALE)
+        assert len(flagged.flags) == 1
+        assert flagged.flags[0].reason == FlagReason.STALE
+
+    def test_records_multiple_flags(self):
+        unit = _make_unit()
+        unit = apply_flag(unit, FlagReason.STALE)
+        unit = apply_flag(unit, FlagReason.INCORRECT)
+        assert len(unit.flags) == 2
+        assert unit.flags[0].reason == FlagReason.STALE
+        assert unit.flags[1].reason == FlagReason.INCORRECT
+
+    def test_flag_has_timestamp(self):
+        unit = _make_unit()
+        flagged = apply_flag(unit, FlagReason.DUPLICATE)
+        assert flagged.flags[0].timestamp is not None
+
+    def test_original_unit_has_no_flags(self):
+        unit = _make_unit()
+        apply_flag(unit, FlagReason.STALE)
+        assert len(unit.flags) == 0
+
+
+class TestEvidenceTimestamps:
+    def test_timestamps_are_identical_on_creation(self):
+        evidence = Evidence()
+        assert evidence.first_observed == evidence.last_confirmed
+
+    def test_explicit_timestamps_are_preserved(self):
+        from datetime import datetime, timezone
+
+        ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        evidence = Evidence(first_observed=ts, last_confirmed=ts)
+        assert evidence.first_observed == ts
+        assert evidence.last_confirmed == ts
+
+
+class TestConfidenceBounds:
+    def test_rejects_confidence_above_one(self):
+        with pytest.raises(ValidationError):
+            Evidence(confidence=5.0)
+
+    def test_rejects_confidence_below_zero(self):
+        with pytest.raises(ValidationError):
+            Evidence(confidence=-0.1)
+
+    def test_accepts_boundary_values(self):
+        low = Evidence(confidence=0.0)
+        high = Evidence(confidence=1.0)
+        assert low.confidence == 0.0
+        assert high.confidence == 1.0
+
+
+class TestDomainValidation:
+    def test_rejects_empty_domain_list(self):
+        with pytest.raises(ValidationError):
+            KnowledgeUnit(
+                id="ku_test",
+                domain=[],
+                insight=_make_insight(),
+            )
+
+    def test_accepts_single_domain(self):
+        unit = KnowledgeUnit(
+            id="ku_test",
+            domain=["databases"],
+            insight=_make_insight(),
+        )
+        assert unit.domain == ["databases"]
+
+
+class TestIdUniqueness:
+    def test_two_units_have_different_ids(self):
+        unit_a = _make_unit()
+        unit_b = _make_unit()
+        assert unit_a.id != unit_b.id
 
 
 class TestSerializationRoundTrip:
