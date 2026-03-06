@@ -18,6 +18,23 @@ repos:
     hooks:
       - id: detect-secrets
 
+  - repo: local
+    hooks:
+      - id: ty-check-server
+        name: ty (server)
+        entry: bash -c 'cd server && uvx ty check craic_mcp --python .venv'
+        language: system
+        pass_filenames: false
+        types: [python]
+        files: ^server/
+      - id: ty-check-team-api
+        name: ty (team-api)
+        entry: bash -c 'cd team-api && uvx ty check team_api --python .venv'
+        language: system
+        pass_filenames: false
+        types: [python]
+        files: ^team-api/
+
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.10.7
     hooks:

@@ -27,7 +27,8 @@ build/
 .coverage
 htmlcov/
 
-uv.lock
-
 .claude/
+.idea/
 .worktrees/
+CLAUDE.local.md
+opencode.json
