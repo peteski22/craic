@@ -25,32 +25,30 @@ mcp = FastMCP("craic")
 
 _MAX_QUERY_LIMIT = 50
 
-_store: LocalStore | None = None
-_store_lock = threading.Lock()
+_store_local = threading.local()
 
 
 def _get_store() -> LocalStore:
-    """Return the local store, creating it on first access.
+    """Return the thread-local store, creating it on first access.
 
-    Thread-safe: uses double-checked locking to ensure a single instance.
+    Each thread gets its own LocalStore instance to avoid sharing a single
+    SQLite connection across threads.
     """
-    global _store  # noqa: PLW0603
-    if _store is None:
-        with _store_lock:
-            if _store is None:
-                db_path_str = os.environ.get("CRAIC_LOCAL_DB_PATH")
-                db_path = Path(db_path_str) if db_path_str else None
-                _store = LocalStore(db_path=db_path)
-    return _store
+    store: LocalStore | None = getattr(_store_local, "store", None)
+    if store is None:
+        db_path_str = os.environ.get("CRAIC_LOCAL_DB_PATH")
+        db_path = Path(db_path_str) if db_path_str else None
+        store = LocalStore(db_path=db_path)
+        _store_local.store = store
+    return store
 
 
 def _close_store() -> None:
-    """Close the store if open."""
-    global _store  # noqa: PLW0603
-    with _store_lock:
-        if _store is not None:
-            _store.close()
-            _store = None
+    """Close the thread-local store for the current thread, if open."""
+    store: LocalStore | None = getattr(_store_local, "store", None)
+    if store is not None:
+        store.close()
+        _store_local.store = None
 
 
 atexit.register(_close_store)

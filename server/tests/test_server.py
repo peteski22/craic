@@ -19,7 +19,7 @@ from craic_mcp.server import (
 def _store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Provide a fresh local store for each test."""
     monkeypatch.setenv("CRAIC_LOCAL_DB_PATH", str(tmp_path / "test.db"))
-    server._store = None
+    server._close_store()
     yield
     server._close_store()
 
