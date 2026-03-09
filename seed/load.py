@@ -13,7 +13,7 @@ The team API must be running before this script is executed.
 
 import argparse
 import json
-import sys
+import math
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -45,6 +45,9 @@ def _check_health(base_url: str) -> None:
             result = json.loads(resp.read())
             if result.get("status") != "ok":
                 raise SystemExit(f"Team API health check failed: {result}")
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")
+        raise SystemExit(f"Team API health check returned HTTP {exc.code}: {body_text}") from exc
     except urllib.error.URLError as exc:
         raise SystemExit(
             f"Cannot reach team API at {base_url}: {exc.reason}\n"
@@ -54,19 +57,18 @@ def _check_health(base_url: str) -> None:
 
 def _confirms_needed(target: float) -> int:
     """Number of /confirm calls to reach target confidence from 0.5."""
-    return max(0, round((target - 0.5) / 0.1))
+    return max(0, math.ceil((target - 0.5) / 0.1 - 1e-9))
 
 
 def _flags_needed(target: float) -> int:
     """Number of /flag calls to reach target confidence from 0.5."""
-    return max(0, round((0.5 - target) / 0.15))
+    return max(0, math.ceil((0.5 - target) / 0.15 - 1e-9))
 
 
 def load(base_url: str) -> None:
     units = json.loads(SEED_FILE.read_text())
     print(f"Loading {len(units)} seed units into {base_url}\n")
 
-    rows = []
     for i, unit in enumerate(units, 1):
         target = unit.get("_target_confidence", 0.5)
         flag_reason = unit.get("_flag_reason", "stale")
@@ -88,7 +90,6 @@ def load(base_url: str) -> None:
                 _post(f"{base_url}/flag/{unit_id}", {"reason": flag_reason})
 
         summary = unit["insight"]["summary"][:60]
-        rows.append((i, unit_id[:20], f"{target:.2f}", summary))
         print(f"  [{i:2d}] {unit_id[:20]}  conf={target:.2f}  {summary}")
 
     print(f"\n✓ {len(units)} units loaded.")
