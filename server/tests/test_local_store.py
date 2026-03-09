@@ -510,6 +510,16 @@ class TestStats:
             "0.7-1.0": 1,
         }
 
+    def test_stats_rejects_negative_recent_limit(self, store: LocalStore):
+        with pytest.raises(ValueError, match="recent_limit must be non-negative"):
+            store.stats(recent_limit=-1)
+
+    def test_stats_allows_zero_recent_limit(self, store: LocalStore):
+        store.insert(_make_unit(domain=["api"]))
+        result = store.stats(recent_limit=0)
+        assert result.total_count == 1
+        assert result.recent == []
+
     def test_stats_raises_when_store_closed(self, tmp_path: Path):
         s = LocalStore(db_path=tmp_path / "test.db")
         s.close()

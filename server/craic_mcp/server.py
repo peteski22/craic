@@ -1,7 +1,7 @@
 """CRAIC MCP server — shared agent knowledge commons.
 
-Exposes five tools via the Model Context Protocol:
-craic_query, craic_propose, craic_confirm, craic_flag, craic_reflect.
+Exposes six tools via the Model Context Protocol:
+craic_query, craic_propose, craic_confirm, craic_flag, craic_reflect, craic_status.
 
 Searches local store first, then the team API. Degrades gracefully
 to local-only mode when the team API is unreachable.

@@ -280,8 +280,13 @@ class LocalStore:
         Returns:
             Store statistics including total count, domain breakdown,
             most recent additions, and confidence distribution.
+
+        Raises:
+            ValueError: If recent_limit is negative.
         """
         self._check_open()
+        if recent_limit < 0:
+            raise ValueError("recent_limit must be non-negative")
 
         total = self._conn.execute("SELECT COUNT(*) FROM knowledge_units").fetchone()[0]
 

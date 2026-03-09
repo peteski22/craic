@@ -29,10 +29,10 @@ Present the results using this structure:
 - ...
 
 ### Confidence Distribution
-■ 0.7–1.0: {count} units
-■ 0.5–0.7: {count} units
-■ 0.3–0.5: {count} units
-■ 0.0–0.3: {count} units
+■ 0.7-1.0: {count} units
+■ 0.5-0.7: {count} units
+■ 0.3-0.5: {count} units
+■ 0.0-0.3: {count} units
 ```
 
 If the store is empty, display: "The local CRAIC store is empty. Knowledge units are added via `craic_propose` or the `/craic:reflect` command."
