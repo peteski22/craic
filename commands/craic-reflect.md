@@ -33,6 +33,8 @@ craic_reflect(session_context="<your session summary>")
 
 The tool may return a `candidates` list or may return an empty list with `status: "stub"`. In both cases, proceed to Step 3.
 
+If the tool call fails (MCP server unavailable, timeout, or any error), note this briefly to the user and continue to Step 3 using local reasoning only — the reflect flow does not require the tool to succeed.
+
 ### Step 3 — Identify candidate knowledge units
 
 Using your own reasoning, scan the session for insights worth sharing. Use any candidates returned by `craic_reflect` as a starting point; if none were returned, identify candidates independently.
@@ -57,7 +59,7 @@ Do **not** include:
 
 - Standard usage of a well-documented API.
 - Project-specific business logic or implementation details that cannot be generalised.
-- Insights already confirmed this session via `craic_confirm`.
+- Insights already surfaced and confirmed during the session (i.e. knowledge units you retrieved via `craic_query` and subsequently called `craic_confirm` on to record that they proved correct).
 
 For each candidate, assign:
 
