@@ -37,15 +37,15 @@ mcp = FastMCP(
         "\n"
         "Environment variables:\n"
         "  CRAIC_LOCAL_DB_PATH  Path to the local SQLite database.\n"
-        "                       Default: platform-specific data directory.\n"
+        "                       Default: ~/.craic/local.db.\n"
         "  CRAIC_TEAM_ADDR      URL of the team knowledge API for shared sync.\n"
-        "                       Default: http://localhost:8742.\n"
-        "                       Set to empty string to disable team sync."
+        "                       Disabled by default. Set to enable team sync,\n"
+        "                       e.g. http://localhost:8742."
     ),
 )
 
 _MAX_QUERY_LIMIT = 50
-_DEFAULT_TEAM_ADDR = "http://localhost:8742"
+_DEFAULT_TEAM_ADDR = ""
 
 _store_local = threading.local()
 _store_registry: list[LocalStore] = []
