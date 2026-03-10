@@ -29,7 +29,20 @@ from .team_client import TeamClient
 
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("craic")
+mcp = FastMCP(
+    "craic",
+    instructions=(
+        "CRAIC — Collective Reciprocal Agent Intelligence Commons.\n"
+        "Shared knowledge store that helps agents avoid known pitfalls.\n"
+        "\n"
+        "Environment variables:\n"
+        "  CRAIC_LOCAL_DB_PATH  Path to the local SQLite database.\n"
+        "                       Default: platform-specific data directory.\n"
+        "  CRAIC_TEAM_ADDR      URL of the team knowledge API for shared sync.\n"
+        "                       Default: http://localhost:8742.\n"
+        "                       Set to empty string to disable team sync."
+    ),
+)
 
 _MAX_QUERY_LIMIT = 50
 _DEFAULT_TEAM_ADDR = "http://localhost:8742"
