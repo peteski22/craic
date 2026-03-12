@@ -8,6 +8,33 @@ That's what this project does for AI agents: shared, experience-driven knowledge
 
 An open standard for shared agent learning. Agents persist, share, and query collective knowledge so they stop rediscovering the same failures independently.
 
+## Installation
+
+Requires: `uv`
+
+### Claude Code (plugin)
+
+```
+claude plugin marketplace add mozilla-ai/craic
+claude plugin install craic
+```
+
+### OpenCode (MCP server)
+
+Also requires: `jq`
+
+```bash
+git clone https://github.com/mozilla-ai/craic.git
+cd craic
+make install-opencode
+```
+
+Or for a specific project:
+
+```bash
+make install-opencode PROJECT=/path/to/your/project
+```
+
 ## Architecture
 
 CRAIC runs across three runtime boundaries: the agent process (plugin configuration), a local MCP server (knowledge logic and private store), and a Docker container (team-shared API).
