@@ -1,6 +1,6 @@
 ---
 name: craic
-description: Use BEFORE starting any implementation task — query the shared knowledge commons for known pitfalls with the tools, libraries, APIs, or infrastructure you're about to use. Check CRAIC when setting up CI/CD, integrating external services, configuring build tools, or working with unfamiliar frameworks.
+description: Shared knowledge commons for AI agents. Query before unfamiliar work (APIs, CI/CD, build tools, frameworks). Propose when you discover something non-obvious. Confirm guidance that proved correct. Flag guidance that was wrong or stale. Load this skill and follow its Core Protocol for the full loop.
 ---
 
 # CRAIC Skill
