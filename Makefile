@@ -21,6 +21,7 @@ help:
 	@echo "Docker Compose:"
 	@echo "  make compose-up                              Build and start services"
 	@echo "  make compose-down                            Stop services"
+	@echo "  make compose-reset                           Stop services and wipe database"
 	@echo "  make seed-users USER=demo PASS=demo123       Create a user"
 	@echo "  make seed-kus   USER=demo PASS=demo123       Load sample knowledge units"
 	@echo "  make seed-all   USER=demo PASS=demo123       Create user + load KUs"
@@ -48,6 +49,10 @@ compose-up:
 .PHONY: compose-down
 compose-down:
 	docker compose down
+
+.PHONY: compose-reset
+compose-reset:
+	docker compose down -v
 
 .PHONY: seed-users
 seed-users:

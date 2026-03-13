@@ -131,18 +131,24 @@ export function ReviewPage() {
 
   return (
     <div>
-      <div className="flex justify-end mb-4 items-center gap-2">
+      <div className={`max-w-xl mx-auto flex justify-end mb-4 items-center gap-2 rounded-lg px-3 py-2 transition-colors ${
+        quickMode ? "bg-amber-50 border border-amber-200" : ""
+      }`}>
         <label className="flex items-center gap-2 cursor-pointer">
-          <span className="text-xs text-gray-400">Quick mode</span>
+          <span className={`text-xs ${quickMode ? "text-amber-600 font-medium" : "text-gray-400"}`}>Quick mode</span>
           <input
             type="checkbox"
             checked={quickMode}
             onChange={(e) => setQuickMode(e.target.checked)}
             className="sr-only peer"
           />
-          <div className="relative w-9 h-5 bg-gray-200 rounded-full peer-checked:bg-indigo-500 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
+          <div className={`relative w-9 h-5 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all ${
+            quickMode ? "bg-amber-500 after:translate-x-4" : "bg-gray-200"
+          }`} />
         </label>
-        <span className="text-xs text-gray-400">Skip confirmation step</span>
+        <span className={`text-xs ${quickMode ? "text-amber-600 font-medium" : "text-gray-400"}`}>
+          Skip confirmation step
+        </span>
       </div>
 
       {conflictMessage && (

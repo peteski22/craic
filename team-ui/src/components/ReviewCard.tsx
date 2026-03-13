@@ -16,6 +16,13 @@ const CARD_STYLES: Record<string, string> = {
   reject: "border-red-300 bg-red-50",
 };
 
+function confidenceColor(c: number): string {
+  if (c < 0.3) return "text-red-600";
+  if (c < 0.5) return "text-amber-600";
+  if (c < 0.7) return "text-yellow-500";
+  return "text-green-600";
+}
+
 export function ReviewCard({ unit, selection, onSelect }: Props) {
   const cardStyle = CARD_STYLES[selection ?? "neutral"];
 
@@ -38,16 +45,16 @@ export function ReviewCard({ unit, selection, onSelect }: Props) {
         {unit.insight.detail}
       </p>
 
-      <div className="bg-indigo-50 border-l-3 border-indigo-500 rounded-r-lg px-3 py-2 mb-4">
+      <div className="bg-indigo-50 border-l-3 border-indigo-500 rounded-r-lg px-4 py-3 mb-6">
         <span className="text-xs font-semibold uppercase tracking-wide text-indigo-500">
           Action
         </span>
-        <p className="text-gray-800 text-sm mt-0.5">{unit.insight.action}</p>
+        <p className="text-gray-800 text-sm mt-1">{unit.insight.action}</p>
       </div>
 
-      <div className="flex gap-4 text-sm text-gray-500 mb-4">
+      <div className="flex gap-4 text-sm text-gray-500 mb-6">
         <span>
-          Confidence: <strong className="text-gray-800">{unit.evidence.confidence.toFixed(2)}</strong>
+          Confidence: <strong className={confidenceColor(unit.evidence.confidence)}>{unit.evidence.confidence.toFixed(2)}</strong>
         </span>
         <span>
           Confirmations: <strong className="text-gray-800">{unit.evidence.confirmations}</strong>
