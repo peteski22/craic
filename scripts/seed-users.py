@@ -30,8 +30,12 @@ def main() -> None:
         conn.commit()
         print(f"User '{args.username}' created.")
     except sqlite3.IntegrityError:
-        print(f"User '{args.username}' already exists.", file=sys.stderr)
-        sys.exit(1)
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE username = ?",
+            (password_hash, args.username),
+        )
+        conn.commit()
+        print(f"User '{args.username}' already exists — password updated.")
     finally:
         conn.close()
 
