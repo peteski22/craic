@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { AuthProvider, useAuth } from "./auth";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
 
 function AppRoutes() {
@@ -12,21 +13,15 @@ function AppRoutes() {
         element={isAuthenticated ? <Navigate to="/review" replace /> : <LoginPage />}
       />
       <Route
-        path="/review"
         element={
           <ProtectedRoute>
-            <div>Review Queue (TODO)</div>
+            <Layout />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <div>Dashboard (TODO)</div>
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route path="/review" element={<div>Review Queue (TODO)</div>} />
+        <Route path="/dashboard" element={<div>Dashboard (TODO)</div>} />
+      </Route>
       <Route path="*" element={<Navigate to="/review" replace />} />
     </Routes>
   );
