@@ -136,3 +136,23 @@ class TestReviewStats:
         assert body["counts"]["approved"] == 1
         assert body["counts"]["rejected"] == 1
         assert body["counts"]["pending"] == 1
+
+
+class TestReviewStatsDetail:
+    def test_stats_includes_confidence_distribution(self, client: TestClient) -> None:
+        token = _login(client)
+        unit = _propose(client)
+        client.post(f"/review/{unit['id']}/approve", headers=_auth_header(token))
+        resp = client.get("/review/stats", headers=_auth_header(token))
+        body = resp.json()
+        assert "confidence_distribution" in body
+        total = sum(body["confidence_distribution"].values())
+        assert total == 1
+
+    def test_stats_includes_recent_activity(self, client: TestClient) -> None:
+        token = _login(client)
+        unit = _propose(client)
+        client.post(f"/review/{unit['id']}/approve", headers=_auth_header(token))
+        resp = client.get("/review/stats", headers=_auth_header(token))
+        body = resp.json()
+        assert len(body["recent_activity"]) >= 1

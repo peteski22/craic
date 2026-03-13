@@ -181,16 +181,13 @@ def review_stats(
 ) -> ReviewStatsResponse:
     """Return dashboard metrics.
 
-    Confidence distribution and recent activity are placeholder empty values
-    in this task. They are wired to real store methods in Task 8.
-
     Args:
         _user: The authenticated user (unused, enforces auth).
         store: The team store dependency.
 
     Returns:
-        Aggregated counts by status, domain distribution, and empty
-        confidence/activity placeholders.
+        Aggregated counts by status, domain distribution, confidence
+        distribution, recent activity, and daily trend data.
     """
     counts = store.counts_by_status()
     return ReviewStatsResponse(
@@ -200,7 +197,9 @@ def review_stats(
             "rejected": counts.get("rejected", 0),
         },
         domains=store.domain_counts(),
-        confidence_distribution={},
-        recent_activity=[],
-        trends=TrendsResponse(daily=[]),
+        confidence_distribution=store.confidence_distribution(),
+        recent_activity=store.recent_activity(),
+        trends=TrendsResponse(
+            daily=[DailyCount(**d) for d in store.daily_counts()],
+        ),
     )

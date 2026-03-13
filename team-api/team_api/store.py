@@ -426,6 +426,78 @@ class TeamStore:
             return None
         return {"username": row[0], "password_hash": row[1], "created_at": row[2]}
 
+    def confidence_distribution(self) -> dict[str, int]:
+        """Return confidence distribution buckets for approved KUs."""
+        self._check_open()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT data FROM knowledge_units WHERE status = 'approved'"
+            ).fetchall()
+        buckets = {"0.0-0.3": 0, "0.3-0.6": 0, "0.6-0.8": 0, "0.8-1.0": 0}
+        for (data,) in rows:
+            unit = KnowledgeUnit.model_validate_json(data)
+            c = unit.evidence.confidence
+            if c < 0.3:
+                buckets["0.0-0.3"] += 1
+            elif c < 0.6:
+                buckets["0.3-0.6"] += 1
+            elif c < 0.8:
+                buckets["0.6-0.8"] += 1
+            else:
+                buckets["0.8-1.0"] += 1
+        return buckets
+
+    def recent_activity(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Return recent activity (proposals and reviews), sorted by event time.
+
+        Fetches more rows than needed, sorts in-memory by event timestamp,
+        and returns the most recent `limit` entries.
+
+        Args:
+            limit: Maximum number of activity entries to return.
+
+        Returns:
+            List of activity event dicts, newest first.
+        """
+        self._check_open()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, data, status, reviewed_by, reviewed_at "
+                "FROM knowledge_units "
+                "ORDER BY rowid DESC LIMIT ?",
+                (limit * 2,),
+            ).fetchall()
+        activity = []
+        for row in rows:
+            unit = KnowledgeUnit.model_validate_json(row[1])
+            proposed_ts = (
+                unit.evidence.first_observed.isoformat()
+                if unit.evidence.first_observed
+                else ""
+            )
+            # Every KU generates a "proposed" event.
+            activity.append(
+                {
+                    "type": "proposed",
+                    "unit_id": row[0],
+                    "summary": unit.insight.summary,
+                    "timestamp": proposed_ts,
+                }
+            )
+            # Reviewed KUs also generate an approve/reject event.
+            if row[2] in ("approved", "rejected"):
+                activity.append(
+                    {
+                        "type": row[2],
+                        "unit_id": row[0],
+                        "summary": unit.insight.summary,
+                        "reviewed_by": row[3],
+                        "timestamp": row[4] or proposed_ts,
+                    }
+                )
+        activity.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
+        return activity[:limit]
+
     def daily_counts(self, *, days: int = 30) -> list[dict[str, Any]]:
         """Return daily proposal counts for the last N days.
 
