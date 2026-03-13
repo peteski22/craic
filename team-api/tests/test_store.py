@@ -106,7 +106,9 @@ class TestQuery:
         assert store.query(["networking"]) == []
 
     def test_filters_by_language(self, store: TeamStore) -> None:
-        py = _insert_and_approve(store, domain=["web"], context=Context(languages=["python"]))
+        py = _insert_and_approve(
+            store, domain=["web"], context=Context(languages=["python"])
+        )
         _insert_and_approve(store, domain=["web"], context=Context(languages=["go"]))
         results = store.query(["web"], language="python")
         assert len(results) == 1
@@ -236,7 +238,9 @@ class TestReviewQueue:
         page2 = store.pending_queue(limit=2, offset=2)
         assert len(page1) == 2
         assert len(page2) == 1
-        ids = {r["knowledge_unit"].id for r in page1} | {r["knowledge_unit"].id for r in page2}
+        ids = {r["knowledge_unit"].id for r in page1} | {
+            r["knowledge_unit"].id for r in page2
+        }
         assert len(ids) == 3
 
     def test_counts_by_status_empty(self, store: TeamStore) -> None:

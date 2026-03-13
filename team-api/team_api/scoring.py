@@ -12,7 +12,9 @@ CONFIDENCE_FLOOR = 0.0
 
 def apply_confirmation(unit: KnowledgeUnit) -> KnowledgeUnit:
     """Increment confirmations and boost confidence, capped at 1.0."""
-    new_confidence = min(unit.evidence.confidence + CONFIRMATION_BOOST, CONFIDENCE_CEILING)
+    new_confidence = min(
+        unit.evidence.confidence + CONFIRMATION_BOOST, CONFIDENCE_CEILING
+    )
     new_confirmations = unit.evidence.confirmations + 1
     return unit.model_copy(
         update={
@@ -58,7 +60,9 @@ def calculate_relevance(
     unit_domains = set(unit.domain)
     query_domain_set = set(query_domains)
     if unit_domains or query_domain_set:
-        domain_score = len(unit_domains & query_domain_set) / len(unit_domains | query_domain_set)
+        domain_score = len(unit_domains & query_domain_set) / len(
+            unit_domains | query_domain_set
+        )
     else:
         domain_score = 0.0
 
@@ -72,4 +76,8 @@ def calculate_relevance(
     if query_framework and query_framework in unit.context.frameworks:
         framework_score = 1.0
 
-    return domain_weight * domain_score + language_weight * language_score + framework_weight * framework_score
+    return (
+        domain_weight * domain_score
+        + language_weight * language_score
+        + framework_weight * framework_score
+    )
