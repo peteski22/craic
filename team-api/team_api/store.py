@@ -12,6 +12,7 @@ from types import TracebackType
 
 from .knowledge_unit import KnowledgeUnit
 from .scoring import calculate_relevance
+from .tables import ensure_review_columns, ensure_users_table
 
 DEFAULT_DB_PATH = Path("/data/team.db")
 
@@ -72,6 +73,8 @@ class TeamStore:
     def _ensure_schema(self) -> None:
         """Create tables and indexes if they do not exist."""
         self._conn.executescript(_SCHEMA_SQL)
+        ensure_review_columns(self._conn)
+        ensure_users_table(self._conn)
 
     def _check_open(self) -> None:
         """Raise if the store has been closed."""
@@ -147,6 +150,26 @@ class TeamStore:
         if row is None:
             return None
         return KnowledgeUnit.model_validate_json(row[0])
+
+    def get_review_status(self, unit_id: str) -> dict[str, str | None] | None:
+        """Return review metadata for a knowledge unit.
+
+        Args:
+            unit_id: The knowledge unit identifier.
+
+        Returns:
+            A dict with status, reviewed_by, and reviewed_at keys, or None
+            if the unit does not exist.
+        """
+        self._check_open()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT status, reviewed_by, reviewed_at FROM knowledge_units WHERE id = ?",
+                (unit_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {"status": row[0], "reviewed_by": row[1], "reviewed_at": row[2]}
 
     def update(self, unit: KnowledgeUnit) -> None:
         """Replace an existing knowledge unit in the store.

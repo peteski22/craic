@@ -132,6 +132,17 @@ class TestStats:
         assert counts["auth"] == 1
 
 
+class TestReviewStatus:
+    def test_inserted_unit_has_pending_status(self, store: TeamStore) -> None:
+        unit = _make_unit()
+        store.insert(unit)
+        status = store.get_review_status(unit.id)
+        assert status is not None
+        assert status["status"] == "pending"
+        assert status["reviewed_by"] is None
+        assert status["reviewed_at"] is None
+
+
 class TestEndToEnd:
     def test_propose_confirm_flag_lifecycle(self, store: TeamStore) -> None:
         unit = _make_unit(
