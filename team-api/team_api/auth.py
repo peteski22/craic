@@ -25,10 +25,11 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def create_token(username: str, *, secret: str, ttl_hours: int = 24) -> str:
     """Create a JWT token for the given username."""
+    now = datetime.now(UTC)
     payload = {
         "sub": username,
-        "exp": datetime.now(UTC) + timedelta(hours=ttl_hours),
-        "iat": datetime.now(UTC),
+        "iat": now,
+        "exp": now + timedelta(hours=ttl_hours),
     }
     return jwt.encode(payload, secret, algorithm="HS256")
 
@@ -92,9 +93,10 @@ def get_current_user(request: Request) -> str:
             status_code=401, detail="Missing or invalid authorization header"
         )
     token = auth_header.removeprefix("Bearer ")
+    secret = _get_jwt_secret()
     try:
-        payload = verify_token(token, secret=_get_jwt_secret())
-    except Exception as exc:
+        payload = verify_token(token, secret=secret)
+    except jwt.PyJWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
     return payload["sub"]
 
