@@ -179,6 +179,12 @@ class LocalStore:
             return None
         return KnowledgeUnit.model_validate_json(row[0])
 
+    def all(self) -> list[KnowledgeUnit]:
+        """Return every knowledge unit in the store."""
+        self._check_open()
+        rows = self._conn.execute("SELECT data FROM knowledge_units").fetchall()
+        return [KnowledgeUnit.model_validate_json(row[0]) for row in rows]
+
     def update(self, unit: KnowledgeUnit) -> None:
         """Replace an existing knowledge unit in the store.
 

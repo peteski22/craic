@@ -598,3 +598,28 @@ class TestStats:
         s.close()
         with pytest.raises(RuntimeError, match="LocalStore is closed"):
             s.stats()
+
+
+class TestAll:
+    def test_all_returns_empty_list_for_empty_store(
+        self, store: LocalStore
+    ) -> None:
+        assert store.all() == []
+
+    def test_all_returns_all_inserted_units(
+        self, store: LocalStore
+    ) -> None:
+        u1 = _make_unit(domain=["api"])
+        u2 = _make_unit(domain=["databases"])
+        store.insert(u1)
+        store.insert(u2)
+        result = store.all()
+        ids = {u.id for u in result}
+        assert ids == {u1.id, u2.id}
+
+    def test_all_raises_when_store_closed(
+        self, store: LocalStore
+    ) -> None:
+        store.close()
+        with pytest.raises(RuntimeError, match="closed"):
+            store.all()
