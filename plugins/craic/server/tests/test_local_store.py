@@ -601,14 +601,10 @@ class TestStats:
 
 
 class TestAll:
-    def test_all_returns_empty_list_for_empty_store(
-        self, store: LocalStore
-    ) -> None:
+    def test_all_returns_empty_list_for_empty_store(self, store: LocalStore) -> None:
         assert store.all() == []
 
-    def test_all_returns_all_inserted_units(
-        self, store: LocalStore
-    ) -> None:
+    def test_all_returns_all_inserted_units(self, store: LocalStore) -> None:
         u1 = _make_unit(domain=["api"])
         u2 = _make_unit(domain=["databases"])
         store.insert(u1)
@@ -617,9 +613,39 @@ class TestAll:
         ids = {u.id for u in result}
         assert ids == {u1.id, u2.id}
 
-    def test_all_raises_when_store_closed(
-        self, store: LocalStore
-    ) -> None:
+    def test_all_raises_when_store_closed(self, store: LocalStore) -> None:
         store.close()
         with pytest.raises(RuntimeError, match="closed"):
             store.all()
+
+
+class TestDelete:
+    def test_delete_removes_unit(self, store: LocalStore) -> None:
+        unit = _make_unit(domain=["api"])
+        store.insert(unit)
+        store.delete(unit.id)
+        assert store.get(unit.id) is None
+
+    def test_delete_removes_domain_tags(self, store: LocalStore) -> None:
+        unit = _make_unit(domain=["api", "payments"])
+        store.insert(unit)
+        store.delete(unit.id)
+        domains = _inspect_domains(store.db_path, unit.id)
+        assert domains == []
+
+    def test_delete_removes_fts_entry(self, store: LocalStore) -> None:
+        unit = _make_unit(domain=["api"])
+        store.insert(unit)
+        store.delete(unit.id)
+        # Query by summary text should return nothing.
+        results = store.query(["api"])
+        assert len(results) == 0
+
+    def test_delete_missing_unit_raises_key_error(self, store: LocalStore) -> None:
+        with pytest.raises(KeyError, match="ku_nonexistent"):
+            store.delete("ku_nonexistent")
+
+    def test_delete_raises_when_store_closed(self, store: LocalStore) -> None:
+        store.close()
+        with pytest.raises(RuntimeError, match="closed"):
+            store.delete("ku_any")

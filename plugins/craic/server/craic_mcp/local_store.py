@@ -185,6 +185,32 @@ class LocalStore:
         rows = self._conn.execute("SELECT data FROM knowledge_units").fetchall()
         return [KnowledgeUnit.model_validate_json(row[0]) for row in rows]
 
+    def delete(self, unit_id: str) -> None:
+        """Remove a knowledge unit by ID.
+
+        Args:
+            unit_id: The knowledge unit identifier to delete.
+
+        Raises:
+            KeyError: If no unit with the given ID exists.
+        """
+        self._check_open()
+        with self._conn:
+            cursor = self._conn.execute(
+                "DELETE FROM knowledge_units WHERE id = ?",
+                (unit_id,),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(f"Knowledge unit not found: {unit_id}")
+            self._conn.execute(
+                "DELETE FROM knowledge_unit_domains WHERE unit_id = ?",
+                (unit_id,),
+            )
+            self._conn.execute(
+                "DELETE FROM knowledge_units_fts WHERE id = ?",
+                (unit_id,),
+            )
+
     def update(self, unit: KnowledgeUnit) -> None:
         """Replace an existing knowledge unit in the store.
 
