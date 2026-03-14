@@ -33,13 +33,13 @@ class TeamRejectedError(Exception):
 
 
 class TeamClient:
-    """Synchronous HTTP client for the CRAIC Team API.
+    """Async HTTP client for the CRAIC Team API.
 
     All methods return None (or False for health) when the team API is
     unreachable or returns an unexpected response, allowing the caller
     to degrade gracefully.
 
-    Supports the context manager protocol for resource-safe usage.
+    Supports the async context manager protocol for resource-safe usage.
     """
 
     def __init__(self, base_url: str, timeout: float = _DEFAULT_TIMEOUT) -> None:
@@ -49,33 +49,33 @@ class TeamClient:
             base_url: Team API base URL (e.g. ``http://localhost:8742``).
             timeout: Request timeout in seconds.
         """
-        self._client = httpx.Client(base_url=base_url, timeout=timeout)
+        self._client = httpx.AsyncClient(base_url=base_url, timeout=timeout)
 
-    def __enter__(self) -> "TeamClient":
-        """Enter the context manager."""
+    async def __aenter__(self) -> "TeamClient":
+        """Enter the async context manager."""
         return self
 
-    def __exit__(self, *exc_info: object) -> None:
-        """Exit the context manager and close the client."""
-        self.close()
+    async def __aexit__(self, *exc_info: object) -> None:
+        """Exit the async context manager and close the client."""
+        await self.close()
 
-    def close(self) -> None:
+    async def close(self) -> None:
         """Close the underlying HTTP client."""
-        self._client.close()
+        await self._client.aclose()
 
-    def health(self) -> bool:
+    async def health(self) -> bool:
         """Check whether the team API is reachable.
 
         Returns:
             True if the health endpoint responds with 200, False otherwise.
         """
         try:
-            resp = self._client.get("/health")
+            resp = await self._client.get("/health")
             return resp.status_code == 200
         except _GRACEFUL_ERRORS:
             return False
 
-    def query(
+    async def query(
         self,
         domains: list[str],
         *,
@@ -104,14 +104,14 @@ class TeamClient:
         if framework:
             params["framework"] = framework
         try:
-            resp = self._client.get("/query", params=params)
+            resp = await self._client.get("/query", params=params)
             resp.raise_for_status()
             return [KnowledgeUnit.model_validate(item) for item in resp.json()]
         except _GRACEFUL_ERRORS:
             logger.debug("Team API query failed", exc_info=True)
             return None
 
-    def propose(self, unit: KnowledgeUnit) -> KnowledgeUnit | None:
+    async def propose(self, unit: KnowledgeUnit) -> KnowledgeUnit | None:
         """Push a knowledge unit to the team store.
 
         Args:
@@ -132,7 +132,7 @@ class TeamClient:
             "created_by": unit.created_by,
         }
         try:
-            resp = self._client.post("/propose", json=body)
+            resp = await self._client.post("/propose", json=body)
             resp.raise_for_status()
             return KnowledgeUnit.model_validate(resp.json())
         except httpx.HTTPStatusError as exc:
@@ -144,7 +144,7 @@ class TeamClient:
             logger.debug("Team API propose unreachable", exc_info=True)
             return None
 
-    def confirm(self, unit_id: str) -> KnowledgeUnit | None:
+    async def confirm(self, unit_id: str) -> KnowledgeUnit | None:
         """Confirm a knowledge unit in the team store.
 
         Args:
@@ -155,7 +155,7 @@ class TeamClient:
             unreachable or the unit was not found.
         """
         try:
-            resp = self._client.post(f"/confirm/{unit_id}")
+            resp = await self._client.post(f"/confirm/{unit_id}")
             if resp.status_code == 404:
                 return None
             resp.raise_for_status()
@@ -164,7 +164,7 @@ class TeamClient:
             logger.debug("Team API confirm failed", exc_info=True)
             return None
 
-    def flag(self, unit_id: str, reason: FlagReason) -> KnowledgeUnit | None:
+    async def flag(self, unit_id: str, reason: FlagReason) -> KnowledgeUnit | None:
         """Flag a knowledge unit in the team store.
 
         Args:
@@ -176,7 +176,7 @@ class TeamClient:
             unreachable or the unit was not found.
         """
         try:
-            resp = self._client.post(
+            resp = await self._client.post(
                 f"/flag/{unit_id}",
                 json={"reason": reason.value},
             )
