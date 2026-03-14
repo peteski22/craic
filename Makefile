@@ -17,6 +17,14 @@ help:
 	@echo "  make test       Run all tests"
 	@echo "  make lint       Run linters"
 	@echo "  make format     Format code"
+	@echo ""
+	@echo "Docker Compose:"
+	@echo "  make compose-up                              Build and start services"
+	@echo "  make compose-down                            Stop services"
+	@echo "  make compose-reset                           Stop services and wipe database"
+	@echo "  make seed-users USER=demo PASS=demo123       Create a user"
+	@echo "  make seed-kus   USER=demo PASS=demo123       Load sample knowledge units"
+	@echo "  make seed-all   USER=demo PASS=demo123       Create user + load KUs"
 
 .PHONY: install-opencode
 install-opencode:
@@ -34,12 +42,65 @@ else
 	@bash "$(CURDIR)/scripts/install-opencode.sh" uninstall
 endif
 
+.PHONY: compose-up
+compose-up:
+	docker compose up --build
+
+.PHONY: compose-down
+compose-down:
+	docker compose down
+
+.PHONY: compose-reset
+compose-reset:
+	docker compose down -v
+
+.PHONY: seed-users
+seed-users:
+ifndef USER
+	$(error USER is required. Usage: make seed-users USER=peter PASS=changeme)
+endif
+ifndef PASS
+	$(error PASS is required. Usage: make seed-users USER=peter PASS=changeme)
+endif
+	docker compose exec craic-team-api /app/.venv/bin/python /app/scripts/seed-users.py --username "$(USER)" --password "$(PASS)"
+
+.PHONY: seed-kus
+seed-kus:
+ifndef USER
+	$(error USER is required. Usage: make seed-kus USER=demo PASS=demo123)
+endif
+ifndef PASS
+	$(error PASS is required. Usage: make seed-kus USER=demo PASS=demo123)
+endif
+	docker compose exec craic-team-api /app/.venv/bin/python /app/scripts/seed/load.py --user "$(USER)" --pass "$(PASS)" --url http://localhost:8742
+
+.PHONY: seed-all
+seed-all:
+ifndef USER
+	$(error USER is required. Usage: make seed-all USER=demo PASS=demo123)
+endif
+ifndef PASS
+	$(error PASS is required. Usage: make seed-all USER=demo PASS=demo123)
+endif
+	$(MAKE) seed-users USER="$(USER)" PASS="$(PASS)"
+	$(MAKE) seed-kus USER="$(USER)" PASS="$(PASS)"
+
+.PHONY: dev-api
+dev-api:
+	cd team-api && CRAIC_DB_PATH=./dev.db CRAIC_JWT_SECRET=dev-secret uv run craic-team-api
+
+.PHONY: dev-ui
+dev-ui:
+	cd team-ui && pnpm dev
+
 .PHONY: lint
 lint:
 	cd plugins/craic/server && uv run ruff check .
 	cd plugins/craic/server && uv run ruff format --check .
 	cd team-api && uv run ruff check .
 	cd team-api && uv run ruff format --check .
+	cd team-ui && pnpm tsc -b
+	cd team-ui && pnpm lint
 
 .PHONY: format
 format:
@@ -55,6 +116,7 @@ format-check:
 typecheck:
 	cd plugins/craic/server && uv sync --group dev && uvx ty check craic_mcp --python .venv
 	cd team-api && uv sync --group dev && uvx ty check team_api --python .venv
+	cd team-ui && pnpm tsc -b
 
 .PHONY: test
 test:

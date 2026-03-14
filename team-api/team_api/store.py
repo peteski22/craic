@@ -7,11 +7,14 @@ Implements the context manager protocol for deterministic resource cleanup.
 
 import sqlite3
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
+from typing import Any
 
 from .knowledge_unit import KnowledgeUnit
 from .scoring import calculate_relevance
+from .tables import ensure_review_columns, ensure_users_table
 
 DEFAULT_DB_PATH = Path("/data/team.db")
 
@@ -72,6 +75,8 @@ class TeamStore:
     def _ensure_schema(self) -> None:
         """Create tables and indexes if they do not exist."""
         self._conn.executescript(_SCHEMA_SQL)
+        ensure_review_columns(self._conn)
+        ensure_users_table(self._conn)
 
     def _check_open(self) -> None:
         """Raise if the store has been closed."""
@@ -119,10 +124,15 @@ class TeamStore:
             raise ValueError("At least one non-empty domain is required")
         unit = unit.model_copy(update={"domain": domains})
         data = unit.model_dump_json()
+        created_at = (
+            unit.evidence.first_observed.isoformat()
+            if unit.evidence.first_observed
+            else datetime.now(UTC).isoformat()
+        )
         with self._lock, self._conn:
             self._conn.execute(
-                "INSERT INTO knowledge_units (id, data) VALUES (?, ?)",
-                (unit.id, data),
+                "INSERT INTO knowledge_units (id, data, created_at) VALUES (?, ?, ?)",
+                (unit.id, data, created_at),
             )
             self._conn.executemany(
                 "INSERT INTO knowledge_unit_domains (unit_id, domain) VALUES (?, ?)",
@@ -130,7 +140,31 @@ class TeamStore:
             )
 
     def get(self, unit_id: str) -> KnowledgeUnit | None:
-        """Retrieve a knowledge unit by ID.
+        """Retrieve an approved knowledge unit by ID.
+
+        Agent-facing: only returns KUs that have passed human review.
+        For internal access regardless of status, use get_any().
+
+        Args:
+            unit_id: The knowledge unit identifier.
+
+        Returns:
+            The knowledge unit, or None if not found or not approved.
+        """
+        self._check_open()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT data FROM knowledge_units WHERE id = ? AND status = 'approved'",
+                (unit_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return KnowledgeUnit.model_validate_json(row[0])
+
+    def get_any(self, unit_id: str) -> KnowledgeUnit | None:
+        """Retrieve a knowledge unit by ID regardless of review status.
+
+        Internal use only — review endpoints and activity feed.
 
         Args:
             unit_id: The knowledge unit identifier.
@@ -147,6 +181,47 @@ class TeamStore:
         if row is None:
             return None
         return KnowledgeUnit.model_validate_json(row[0])
+
+    def get_review_status(self, unit_id: str) -> dict[str, str | None] | None:
+        """Return review metadata for a knowledge unit.
+
+        Args:
+            unit_id: The knowledge unit identifier.
+
+        Returns:
+            A dict with status, reviewed_by, and reviewed_at keys, or None
+            if the unit does not exist.
+        """
+        self._check_open()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT status, reviewed_by, reviewed_at FROM knowledge_units WHERE id = ?",
+                (unit_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {"status": row[0], "reviewed_by": row[1], "reviewed_at": row[2]}
+
+    def set_review_status(self, unit_id: str, status: str, reviewed_by: str) -> None:
+        """Update the review status of a knowledge unit.
+
+        Args:
+            unit_id: The knowledge unit identifier.
+            status: The new review status (e.g. "approved", "rejected").
+            reviewed_by: Username of the reviewer.
+
+        Raises:
+            KeyError: If no unit with the given ID exists.
+        """
+        self._check_open()
+        now = datetime.now(UTC).isoformat()
+        with self._lock, self._conn:
+            cursor = self._conn.execute(
+                "UPDATE knowledge_units SET status = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?",
+                (status, reviewed_by, now, unit_id),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(f"Knowledge unit not found: {unit_id}")
 
     def update(self, unit: KnowledgeUnit) -> None:
         """Replace an existing knowledge unit in the store.
@@ -216,7 +291,8 @@ class TeamStore:
         sql = f"""
             SELECT ku.data
             FROM knowledge_units ku
-            WHERE ku.id IN (
+            WHERE ku.status = 'approved'
+            AND ku.id IN (
                 SELECT DISTINCT unit_id
                 FROM knowledge_unit_domains
                 WHERE domain IN ({placeholders})
@@ -262,3 +338,189 @@ class TeamStore:
                 "SELECT domain, COUNT(*) FROM knowledge_unit_domains GROUP BY domain ORDER BY COUNT(*) DESC"
             ).fetchall()
         return {row[0]: row[1] for row in rows}
+
+    def pending_queue(
+        self, *, limit: int = 20, offset: int = 0
+    ) -> list[dict[str, Any]]:
+        """Return pending KUs with review metadata, oldest first.
+
+        Args:
+            limit: Maximum number of results to return.
+            offset: Number of results to skip.
+
+        Returns:
+            List of dicts with knowledge_unit, status, reviewed_by,
+            and reviewed_at keys.
+        """
+        self._check_open()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT data, status, reviewed_by, reviewed_at "
+                "FROM knowledge_units WHERE status = 'pending' "
+                "ORDER BY created_at ASC LIMIT ? OFFSET ?",
+                (limit, offset),
+            ).fetchall()
+        return [
+            {
+                "knowledge_unit": KnowledgeUnit.model_validate_json(row[0]),
+                "status": row[1],
+                "reviewed_by": row[2],
+                "reviewed_at": row[3],
+            }
+            for row in rows
+        ]
+
+    def pending_count(self) -> int:
+        """Return the number of pending KUs."""
+        self._check_open()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT COUNT(*) FROM knowledge_units WHERE status = 'pending'"
+            ).fetchone()
+        return row[0]
+
+    def counts_by_status(self) -> dict[str, int]:
+        """Return KU counts grouped by review status."""
+        self._check_open()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT status, COUNT(*) FROM knowledge_units GROUP BY status"
+            ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def create_user(self, username: str, password_hash: str) -> None:
+        """Insert a new user.
+
+        Args:
+            username: The user's login name.
+            password_hash: Bcrypt hash of the user's password.
+
+        Raises:
+            sqlite3.IntegrityError: If a user with the same username already exists.
+        """
+        self._check_open()
+        now = datetime.now(UTC).isoformat()
+        with self._lock, self._conn:
+            self._conn.execute(
+                "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
+                (username, password_hash, now),
+            )
+
+    def get_user(self, username: str) -> dict[str, str] | None:
+        """Retrieve a user by username.
+
+        Args:
+            username: The user's login name.
+
+        Returns:
+            A dict with username, password_hash, and created_at keys, or None
+            if no user with that username exists.
+        """
+        self._check_open()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT username, password_hash, created_at FROM users WHERE username = ?",
+                (username,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {"username": row[0], "password_hash": row[1], "created_at": row[2]}
+
+    def confidence_distribution(self) -> dict[str, int]:
+        """Return confidence distribution buckets for approved KUs."""
+        self._check_open()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT data FROM knowledge_units WHERE status = 'approved'"
+            ).fetchall()
+        buckets = {"0.0-0.3": 0, "0.3-0.6": 0, "0.6-0.8": 0, "0.8-1.0": 0}
+        for (data,) in rows:
+            unit = KnowledgeUnit.model_validate_json(data)
+            c = unit.evidence.confidence
+            if c < 0.3:
+                buckets["0.0-0.3"] += 1
+            elif c < 0.6:
+                buckets["0.3-0.6"] += 1
+            elif c < 0.8:
+                buckets["0.6-0.8"] += 1
+            else:
+                buckets["0.8-1.0"] += 1
+        return buckets
+
+    def recent_activity(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Return recent activity (proposals and reviews), sorted by event time.
+
+        Fetches more rows than needed, sorts in-memory by event timestamp,
+        and returns the most recent `limit` entries.
+
+        Args:
+            limit: Maximum number of activity entries to return.
+
+        Returns:
+            List of activity event dicts, newest first.
+        """
+        self._check_open()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, data, status, reviewed_by, reviewed_at "
+                "FROM knowledge_units "
+                "ORDER BY rowid DESC LIMIT ?",
+                (limit * 2,),
+            ).fetchall()
+        activity = []
+        for row in rows:
+            unit = KnowledgeUnit.model_validate_json(row[1])
+            proposed_ts = (
+                unit.evidence.first_observed.isoformat()
+                if unit.evidence.first_observed
+                else ""
+            )
+            # Every KU generates a "proposed" event.
+            activity.append(
+                {
+                    "type": "proposed",
+                    "unit_id": row[0],
+                    "summary": unit.insight.summary,
+                    "timestamp": proposed_ts,
+                }
+            )
+            # Reviewed KUs also generate an approve/reject event.
+            if row[2] in ("approved", "rejected"):
+                activity.append(
+                    {
+                        "type": row[2],
+                        "unit_id": row[0],
+                        "summary": unit.insight.summary,
+                        "reviewed_by": row[3],
+                        "timestamp": row[4] or proposed_ts,
+                    }
+                )
+        activity.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
+        return activity[:limit]
+
+    def daily_counts(self, *, days: int = 30) -> list[dict[str, Any]]:
+        """Return daily proposal counts for the last N days.
+
+        Pre-migration rows with NULL created_at are excluded from counts.
+
+        Args:
+            days: Number of days to look back.
+
+        Returns:
+            List of dicts with date and proposed count, ordered ascending.
+
+        Raises:
+            ValueError: If days is not positive.
+        """
+        if days <= 0:
+            raise ValueError("days must be positive")
+        self._check_open()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT date(created_at) as day, COUNT(*) as proposed "
+                "FROM knowledge_units "
+                "WHERE created_at >= date('now', ?) "
+                "GROUP BY day ORDER BY day ASC",
+                (f"-{days} days",),
+            ).fetchall()
+        return [{"date": row[0], "proposed": row[1]} for row in rows]
