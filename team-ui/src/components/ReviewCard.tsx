@@ -1,11 +1,15 @@
+import { forwardRef } from "react";
 import type { KnowledgeUnit, Selection } from "../types";
 import { DomainTags } from "./DomainTags";
 import { timeAgo } from "../utils";
+import type { DragState } from "../hooks/useCardDrag";
+import { BADGE_APPEAR_RATIO, MAX_ROTATION_DEG } from "../hooks/useCardDrag";
 
 interface Props {
   unit: KnowledgeUnit;
   selection: Selection;
-  onSelect: (s: Selection) => void;
+  drag: DragState;
+  pointerHandlers: Record<string, (e: React.PointerEvent) => void>;
 }
 
 const CARD_STYLES: Record<string, string> = {
@@ -22,6 +26,12 @@ const ACTION_BOX_STYLES: Record<string, string> = {
   skip: "bg-slate-50 border-slate-400 text-slate-500",
 };
 
+const BADGE_CONFIG: Record<string, { symbol: string; bg: string }> = {
+  approve: { symbol: "\u2713", bg: "bg-green-600" },
+  reject: { symbol: "\u2715", bg: "bg-red-600" },
+  skip: { symbol: "\u2014", bg: "bg-slate-600" },
+};
+
 function confidenceColor(c: number): string {
   if (c < 0.3) return "text-red-600";
   if (c < 0.5) return "text-amber-600";
@@ -29,82 +39,81 @@ function confidenceColor(c: number): string {
   return "text-green-600";
 }
 
-export function ReviewCard({ unit, selection, onSelect }: Props) {
-  const cardStyle = CARD_STYLES[selection ?? "neutral"];
+export const ReviewCard = forwardRef<HTMLDivElement, Props>(
+  function ReviewCard({ unit, selection, drag, pointerHandlers }, ref) {
+    const activeState = drag.isDragging ? drag.dragAction : selection;
+    const cardStyle = CARD_STYLES[activeState ?? "neutral"];
+    const actionBoxStyle = ACTION_BOX_STYLES[activeState ?? "neutral"];
 
-  return (
-    <div
-      className={`border-2 rounded-lg p-6 max-w-xl mx-auto transition-all duration-200 ${cardStyle}`}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <DomainTags domains={unit.domain} variant={selection} />
-        <span className="text-xs text-gray-400">
-          {timeAgo(unit.evidence.first_observed)}
-        </span>
+    const rotation = drag.isDragging
+      ? (drag.offset.x / 300) * MAX_ROTATION_DEG
+      : 0;
+    const shadowScale = drag.isDragging ? 1 + drag.dragProgress * 0.5 : 1;
+    const transform = `translate(${drag.offset.x}px, ${drag.offset.y}px) rotate(${rotation}deg)`;
+    const transition = drag.isDragging ? "none" : "transform 200ms ease-out, box-shadow 200ms ease-out";
+    const shadow = `0 ${4 * shadowScale}px ${20 * shadowScale}px rgba(0,0,0,${0.08 * shadowScale})`;
+
+    const badgeAction = drag.isDragging ? drag.dragAction : null;
+    const showBadge = badgeAction && drag.dragProgress >= BADGE_APPEAR_RATIO;
+    const badgeOpacity = showBadge
+      ? Math.min((drag.dragProgress - BADGE_APPEAR_RATIO) / (1 - BADGE_APPEAR_RATIO), 1)
+      : 0;
+    const badge = badgeAction ? BADGE_CONFIG[badgeAction] : null;
+
+    const badgePosition = (): React.CSSProperties => {
+      if (!badgeAction) return {};
+      if (badgeAction === "approve") return { top: "50%", right: "-14px", transform: "translateY(-50%)" };
+      if (badgeAction === "reject") return { top: "50%", left: "-14px", transform: "translateY(-50%)" };
+      return { top: "-14px", left: "50%", transform: "translateX(-50%)" };
+    };
+
+    return (
+      <div
+        ref={ref}
+        className={`relative border-2 rounded-lg p-6 max-w-xl mx-auto select-none touch-none ${cardStyle}`}
+        style={{ transform, transition, boxShadow: shadow }}
+        {...pointerHandlers}
+      >
+        {showBadge && badge && (
+          <div
+            className={`absolute w-7 h-7 ${badge.bg} rounded-full flex items-center justify-center text-white text-base`}
+            style={{ ...badgePosition(), opacity: badgeOpacity, transition: "opacity 100ms ease-out" }}
+          >
+            {badge.symbol}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mb-3">
+          <DomainTags domains={unit.domain} variant={activeState} />
+          <span className="text-xs text-gray-400">
+            {timeAgo(unit.evidence.first_observed)}
+          </span>
+        </div>
+
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">
+          {unit.insight.summary}
+        </h2>
+
+        <p className="text-gray-600 mb-3 leading-relaxed">
+          {unit.insight.detail}
+        </p>
+
+        <div className={`border-l-3 rounded-r-lg px-4 py-3 mb-6 ${actionBoxStyle}`}>
+          <span className="text-xs font-semibold uppercase tracking-wide">
+            Action
+          </span>
+          <p className="text-gray-800 text-sm mt-1">{unit.insight.action}</p>
+        </div>
+
+        <div className="flex gap-4 text-sm text-gray-500">
+          <span>
+            Confidence: <strong className={confidenceColor(unit.evidence.confidence)}>{unit.evidence.confidence.toFixed(2)}</strong>
+          </span>
+          <span>
+            Confirmations: <strong className="text-gray-800">{unit.evidence.confirmations}</strong>
+          </span>
+        </div>
       </div>
-
-      <h2 className="text-lg font-semibold text-gray-900 mb-2">
-        {unit.insight.summary}
-      </h2>
-
-      <p className="text-gray-600 mb-3 leading-relaxed">
-        {unit.insight.detail}
-      </p>
-
-      <div className={`border-l-3 rounded-r-lg px-4 py-3 mb-6 ${ACTION_BOX_STYLES[selection ?? "neutral"]}`}>
-        <span className="text-xs font-semibold uppercase tracking-wide">
-          Action
-        </span>
-        <p className="text-gray-800 text-sm mt-1">{unit.insight.action}</p>
-      </div>
-
-      <div className="flex gap-4 text-sm text-gray-500 mb-6">
-        <span>
-          Confidence: <strong className={confidenceColor(unit.evidence.confidence)}>{unit.evidence.confidence.toFixed(2)}</strong>
-        </span>
-        <span>
-          Confirmations: <strong className="text-gray-800">{unit.evidence.confirmations}</strong>
-        </span>
-      </div>
-
-      <div className="flex gap-3 justify-center">
-        <button
-          onClick={() => onSelect(selection === "reject" ? null : "reject")}
-          className={`px-8 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 ${
-            selection === "reject"
-              ? "bg-red-600 text-white ring-3 ring-red-200"
-              : selection === "approve"
-                ? "bg-red-100 text-red-600 opacity-40"
-                : "bg-red-100 text-red-600"
-          }`}
-        >
-          ← Reject
-        </button>
-        <button
-          onClick={() => onSelect(selection === "approve" ? null : "approve")}
-          className={`px-8 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 ${
-            selection === "approve"
-              ? "bg-green-600 text-white ring-3 ring-green-200"
-              : selection === "reject"
-                ? "bg-green-100 text-green-600 opacity-40"
-                : "bg-green-100 text-green-600"
-          }`}
-        >
-          Approve →
-        </button>
-      </div>
-
-      <p className={`text-center mt-2 text-xs ${
-        selection === "approve"
-          ? "text-green-600 font-medium"
-          : selection === "reject"
-            ? "text-red-600 font-medium"
-            : "text-gray-400"
-      }`}>
-        {selection
-          ? "Press space to confirm · Esc to cancel"
-          : "Use arrow keys to select, space to confirm"}
-      </p>
-    </div>
-  );
-}
+    );
+  },
+);
