@@ -17,6 +17,7 @@ export interface DragOffset {
 export interface DragState {
   offset: DragOffset;
   isDragging: boolean;
+  isFlyingOff: boolean;
   dragAction: Selection;
   dragProgress: number;
 }
@@ -48,9 +49,11 @@ function inferAction(offset: DragOffset): Selection {
 export function useCardDrag(
   cardRef: React.RefObject<HTMLDivElement | null>,
   onCommit: (action: Exclude<Selection, null>) => void,
+  disabled = false,
 ): UseCardDragResult {
   const [offset, setOffset] = useState<DragOffset>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [isFlyingOff, setIsFlyingOff] = useState(false);
   const flyingOffRef = useRef(false);
   // Drag progress is stored as state so it is only written from event handlers,
   // not computed by reading cardRef during render.
@@ -82,12 +85,12 @@ export function useCardDrag(
   );
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
-    if (flyingOffRef.current) return;
+    if (flyingOffRef.current || disabled) return;
     pointerId.current = e.pointerId;
     startPos.current = { x: e.clientX, y: e.clientY };
     setIsDragging(true);
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, []);
+  }, [disabled]);
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
@@ -137,6 +140,7 @@ export function useCardDrag(
   const flyOff = useCallback(
     async (action: Exclude<Selection, null>) => {
       flyingOffRef.current = true;
+      setIsFlyingOff(true);
       if (action === "skip") {
         setOffset({ x: 0, y: -window.innerHeight });
       } else {
@@ -146,22 +150,26 @@ export function useCardDrag(
       await new Promise((resolve) => setTimeout(resolve, FLY_OFF_MS));
       setOffset({ x: 0, y: 0 });
       flyingOffRef.current = false;
+      setIsFlyingOff(false);
     },
     [],
   );
 
   const snapBack = useCallback(() => {
+    if (pointerId.current !== null) {
+      cardRef.current?.releasePointerCapture(pointerId.current);
+    }
     setOffset({ x: 0, y: 0 });
     setDragProgress(0);
     setIsDragging(false);
     startPos.current = null;
     pointerId.current = null;
-  }, []);
+  }, [cardRef]);
 
   const dragAction = inferAction(offset);
 
   return {
-    drag: { offset, isDragging, dragAction, dragProgress },
+    drag: { offset, isDragging, isFlyingOff, dragAction, dragProgress },
     handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel },
     flyOff,
     snapBack,

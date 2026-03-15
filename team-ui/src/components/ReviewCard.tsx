@@ -3,7 +3,7 @@ import type { KnowledgeUnit, Selection } from "../types";
 import { DomainTags } from "./DomainTags";
 import { timeAgo } from "../utils";
 import type { DragState, PointerHandlers } from "../hooks/useCardDrag";
-import { BADGE_APPEAR_RATIO, MAX_ROTATION_DEG } from "../hooks/useCardDrag";
+import { BADGE_APPEAR_RATIO, FLY_OFF_MS, MAX_ROTATION_DEG, SNAP_BACK_MS } from "../hooks/useCardDrag";
 
 interface Props {
   unit: KnowledgeUnit;
@@ -50,7 +50,11 @@ export const ReviewCard = forwardRef<HTMLDivElement, Props>(
       : 0;
     const shadowScale = drag.isDragging ? 1 + drag.dragProgress * 0.5 : 1;
     const transform = `translate(${drag.offset.x}px, ${drag.offset.y}px) rotate(${rotation}deg)`;
-    const transition = drag.isDragging ? "none" : "transform 200ms ease-out, box-shadow 200ms ease-out";
+    const transition = drag.isDragging
+      ? "none"
+      : drag.isFlyingOff
+        ? `transform ${FLY_OFF_MS}ms ease-in, box-shadow ${FLY_OFF_MS}ms ease-in`
+        : `transform ${SNAP_BACK_MS}ms ease-out, box-shadow ${SNAP_BACK_MS}ms ease-out`;
     const shadow = `0 ${4 * shadowScale}px ${20 * shadowScale}px rgba(0,0,0,${0.08 * shadowScale})`;
 
     const badgeAction = drag.isDragging ? drag.dragAction : null;

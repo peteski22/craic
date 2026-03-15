@@ -59,7 +59,7 @@ export function ReviewPage() {
   // but handleCommit needs drag.flyOff. The ref lets useCardDrag call through
   // to the latest handleCommit without being in its dependency array.
   const handleCommitRef = useRef<(action: Exclude<Selection, null>) => void>(() => {});
-  const drag = useCardDrag(cardRef, (action) => handleCommitRef.current(action));
+  const drag = useCardDrag(cardRef, (action) => handleCommitRef.current(action), submitting);
 
   const handleCommit = useCallback(
     async (action: Exclude<Selection, null>) => {
