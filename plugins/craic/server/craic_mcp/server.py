@@ -32,13 +32,13 @@ logger = logging.getLogger(__name__)
 
 _MAX_QUERY_LIMIT = 50
 _DRAIN_BATCH_SIZE = 50
+_DRAIN_CONCURRENCY = 5
 _DEFAULT_TEAM_ADDR = ""
 
 # Module-level singleton. Initialisation happens on the event loop thread
 # (single-threaded, so no lock needed). Store methods are called via
-# asyncio.to_thread(), which runs them on executor threads; the SQLite
-# connection is created with check_same_thread=False to allow this, and
-# SQLite's internal locking (WAL mode) serialises concurrent access.
+# asyncio.to_thread(), which runs them on executor threads. LocalStore
+# serialises all connection access with an internal threading.Lock.
 _store: LocalStore | None = None
 
 
@@ -123,22 +123,25 @@ async def _drain_local_to_team() -> None:
         _drain_promoted_count = 0
         return
 
+    sem = asyncio.Semaphore(_DRAIN_CONCURRENCY)
+
     async def _promote(unit: KnowledgeUnit) -> bool:
-        try:
-            result = await team_client.propose(unit)
-        except TeamRejectedError:
-            logger.warning(
-                "Team API rejected local KU %s; will retry next startup.",
-                unit.id,
-            )
-            return False
-        if result is None:
-            logger.warning(
-                "Team API unreachable for local KU %s; will retry next startup.",
-                unit.id,
-            )
-            return False
-        return True
+        async with sem:
+            try:
+                result = await team_client.propose(unit)
+            except TeamRejectedError:
+                logger.warning(
+                    "Team API rejected local KU %s; will retry next startup.",
+                    unit.id,
+                )
+                return False
+            if result is None:
+                logger.warning(
+                    "Team API unreachable for local KU %s; will retry next startup.",
+                    unit.id,
+                )
+                return False
+            return True
 
     # Process in fixed-size batches to bound the number of in-flight tasks.
     promoted = 0
