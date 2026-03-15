@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { api } from "../api";
+import { useEffect, useRef, useState } from "react";
+import { api, ApiError } from "../api";
 import { StatusBadge } from "./StatusBadge";
 import { DomainTags } from "./DomainTags";
 import { timeAgo } from "../utils";
@@ -17,16 +17,36 @@ function confidenceColor(c: number): string {
   return "text-green-600";
 }
 
+const MODAL_TITLE_ID = "ku-modal-title";
+
 export function KnowledgeUnitModal({ unitId, onClose }: Props) {
   const [item, setItem] = useState<ReviewItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let ignore = false;
     api
       .getUnit(unitId)
-      .then(setItem)
-      .catch(() => setError("Failed to load knowledge unit."));
+      .then((data) => {
+        if (!ignore) setItem(data);
+      })
+      .catch((err) => {
+        if (ignore) return;
+        if (err instanceof ApiError && err.status === 404) {
+          setError("Knowledge unit not found.");
+        } else {
+          setError("Failed to load knowledge unit.");
+        }
+      });
+    return () => {
+      ignore = true;
+    };
   }, [unitId]);
+
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -43,7 +63,14 @@ export function KnowledgeUnitModal({ unitId, onClose }: Props) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={item ? MODAL_TITLE_ID : undefined}
+        tabIndex={-1}
+        className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto outline-none"
+      >
         {error && (
           <div className="p-6 text-center">
             <p className="text-red-600 text-sm">{error}</p>
@@ -67,7 +94,7 @@ export function KnowledgeUnitModal({ unitId, onClose }: Props) {
         {item && (
           <div className="p-6 space-y-4">
             <div className="flex items-start justify-between gap-3">
-              <h2 className="text-lg font-semibold text-gray-900">
+              <h2 id={MODAL_TITLE_ID} className="text-lg font-semibold text-gray-900">
                 {item.knowledge_unit.insight.summary}
               </h2>
               <button

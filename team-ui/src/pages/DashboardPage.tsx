@@ -201,11 +201,19 @@ export function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {stats.recent_activity.map((event, i) => (
+                    {stats.recent_activity.map((event) => (
                       <tr
-                        key={i}
+                        key={event.unit_id}
                         className="border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 transition-colors"
+                        tabIndex={0}
+                        role="button"
                         onClick={() => setSelectedUnitId(event.unit_id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedUnitId(event.unit_id);
+                          }
+                        }}
                       >
                         <td className="py-2 pr-3 w-20">
                           <StatusBadge status={event.type} />
@@ -230,7 +238,7 @@ export function DashboardPage() {
       )}
 
       {selectedUnitId && (
-        <KnowledgeUnitModal unitId={selectedUnitId} onClose={closeModal} />
+        <KnowledgeUnitModal key={selectedUnitId} unitId={selectedUnitId} onClose={closeModal} />
       )}
     </div>
   );
