@@ -39,7 +39,7 @@ export function ReviewActions({ selection, onSelect, onConfirm, disabled }: Prop
                 : "bg-slate-100 text-slate-600"
           }`}
         >
-          {selection === "skip" ? "Confirm Skip" : "Skip"}
+          {selection === "skip" ? "Confirm Skip" : "\u2191\u2193 Skip"}
         </button>
         <button
           onClick={() => {
@@ -61,8 +61,8 @@ export function ReviewActions({ selection, onSelect, onConfirm, disabled }: Prop
         selection ? "text-gray-500 font-medium" : "text-gray-400"
       }`}>
         {selection
-          ? "Click again or press Space to confirm \u00b7 Esc to cancel"
-          : "Arrow keys to select \u00b7 Space to confirm"}
+          ? "Click again or press Space/Enter to confirm \u00b7 Esc to cancel"
+          : "Arrow keys to select \u00b7 Space/Enter to confirm"}
       </p>
     </div>
   );

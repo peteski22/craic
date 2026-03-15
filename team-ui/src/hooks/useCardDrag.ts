@@ -40,10 +40,14 @@ function inferAction(offset: DragOffset): Selection {
   const absX = Math.abs(offset.x);
   const absY = Math.abs(offset.y);
   if (absX < 10 && absY < 10) return null;
-  if (absX >= absY) {
+  // Require clear dominant axis to avoid flicker on diagonal drags.
+  if (absX >= absY * 1.5) {
     return offset.x > 0 ? "approve" : "reject";
   }
-  return offset.y < 0 ? "skip" : null;
+  if (absY >= absX * 1.5) {
+    return "skip";
+  }
+  return null;
 }
 
 export function useCardDrag(

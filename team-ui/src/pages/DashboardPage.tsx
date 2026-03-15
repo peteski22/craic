@@ -99,7 +99,7 @@ export function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-xs font-semibold text-gray-500 uppercase mb-3">Domains</h3>
               <div className="space-y-3 max-h-48 overflow-y-auto">
@@ -141,7 +141,7 @@ export function DashboardPage() {
                             }}
                           />
                         </div>
-                        <span className="text-[10px] text-gray-500">{bucket}</span>
+                        <span className="text-[10px] text-gray-500 truncate w-full text-center">{bucket}</span>
                       </div>
                     ))}
                   </div>

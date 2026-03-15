@@ -3,7 +3,7 @@ import type { KnowledgeUnit, Selection } from "../types";
 import { DomainTags } from "./DomainTags";
 import { timeAgo } from "../utils";
 import type { DragState, PointerHandlers } from "../hooks/useCardDrag";
-import { BADGE_APPEAR_RATIO, FLY_OFF_MS, MAX_ROTATION_DEG, SNAP_BACK_MS } from "../hooks/useCardDrag";
+import { FLY_OFF_MS, MAX_ROTATION_DEG, SNAP_BACK_MS } from "../hooks/useCardDrag";
 
 interface Props {
   unit: KnowledgeUnit;
@@ -24,12 +24,6 @@ const ACTION_BOX_STYLES: Record<string, string> = {
   approve: "bg-green-50 border-green-500 text-green-600",
   reject: "bg-red-50 border-red-500 text-red-600",
   skip: "bg-slate-50 border-slate-400 text-slate-500",
-};
-
-const BADGE_CONFIG: Record<string, { symbol: string; bg: string }> = {
-  approve: { symbol: "\u2713", bg: "bg-green-600" },
-  reject: { symbol: "\u2715", bg: "bg-red-600" },
-  skip: { symbol: "\u2014", bg: "bg-slate-600" },
 };
 
 function confidenceColor(c: number): string {
@@ -57,36 +51,13 @@ export const ReviewCard = forwardRef<HTMLDivElement, Props>(
         : `transform ${SNAP_BACK_MS}ms ease-out, box-shadow ${SNAP_BACK_MS}ms ease-out`;
     const shadow = `0 ${4 * shadowScale}px ${20 * shadowScale}px rgba(0,0,0,${0.08 * shadowScale})`;
 
-    const badgeAction = drag.isDragging ? drag.dragAction : null;
-    const showBadge = badgeAction && drag.dragProgress >= BADGE_APPEAR_RATIO;
-    const badgeOpacity = showBadge
-      ? Math.min((drag.dragProgress - BADGE_APPEAR_RATIO) / (1 - BADGE_APPEAR_RATIO), 1)
-      : 0;
-    const badge = badgeAction ? BADGE_CONFIG[badgeAction] : null;
-
-    const badgePosition = (): React.CSSProperties => {
-      if (!badgeAction) return {};
-      if (badgeAction === "approve") return { top: "50%", right: "-14px", transform: "translateY(-50%)" };
-      if (badgeAction === "reject") return { top: "50%", left: "-14px", transform: "translateY(-50%)" };
-      return { top: "-14px", left: "50%", transform: "translateX(-50%)" };
-    };
-
     return (
       <div
         ref={ref}
-        className={`relative border-2 rounded-lg p-6 max-w-xl mx-auto select-none touch-none ${cardStyle}`}
+        className={`relative z-0 border-2 rounded-lg p-6 max-w-xl mx-auto select-none touch-none ${cardStyle}`}
         style={{ transform, transition, boxShadow: shadow }}
         {...pointerHandlers}
       >
-        {showBadge && badge && (
-          <div
-            className={`absolute w-7 h-7 ${badge.bg} rounded-full flex items-center justify-center text-white text-base`}
-            style={{ ...badgePosition(), opacity: badgeOpacity, transition: "opacity 100ms ease-out" }}
-          >
-            {badge.symbol}
-          </div>
-        )}
-
         <div className="flex items-center justify-between mb-3">
           <DomainTags domains={unit.domain} variant={activeState} />
           <span className="text-xs text-gray-400">

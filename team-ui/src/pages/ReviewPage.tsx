@@ -3,6 +3,7 @@ import { Link, useOutletContext } from "react-router";
 import { api, ApiError } from "../api";
 import { ReviewCard } from "../components/ReviewCard";
 import { ReviewActions } from "../components/ReviewActions";
+import { DragIndicators } from "../components/DragIndicators";
 import { useCardDrag } from "../hooks/useCardDrag";
 import type { ReviewItem, Selection } from "../types";
 
@@ -41,8 +42,7 @@ export function ReviewPage() {
         setPendingCount(resp.total - skippedIds.current.size);
       } else {
         setCurrent(null);
-        skippedIds.current.clear();
-        setPendingCount(0);
+        setPendingCount(resp.total);
       }
     } catch {
       setError("Failed to load review queue");
@@ -116,10 +116,10 @@ export function ReviewPage() {
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         setSelection("approve");
-      } else if (e.key === "ArrowDown") {
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
         e.preventDefault();
         setSelection("skip");
-      } else if (e.key === " " && selection) {
+      } else if ((e.key === " " || e.key === "Enter") && selection) {
         e.preventDefault();
         confirmAction();
       } else if (e.key === "s" || e.key === "S") {
@@ -144,10 +144,18 @@ export function ReviewPage() {
 
   if (!current) {
     const total = sessionApproved + sessionRejected;
+    const hasSkipped = skippedIds.current.size > 0;
     return (
       <div className="max-w-xl mx-auto border-2 border-gray-200 rounded-lg bg-white p-10 text-center mt-8">
-        <div className="text-4xl mb-3">{"\u2713"}</div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-1">All caught up</h2>
+        <div className="text-4xl mb-3">{hasSkipped ? "\u23ed" : "\u2713"}</div>
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">
+          {hasSkipped ? "All remaining skipped" : "All caught up"}
+        </h2>
+        {hasSkipped && (
+          <p className="text-gray-500">
+            {skippedIds.current.size} skipped {skippedIds.current.size === 1 ? "item" : "items"} still pending
+          </p>
+        )}
         {total > 0 && (
           <>
             <p className="text-gray-500">You've reviewed {total} KUs today</p>
@@ -158,7 +166,15 @@ export function ReviewPage() {
             </div>
           </>
         )}
-        <Link to="/dashboard" className="inline-block mt-5 text-sm font-medium text-indigo-500">
+        {hasSkipped && (
+          <button
+            onClick={() => { skippedIds.current.clear(); fetchNext(); }}
+            className="inline-block mt-5 text-sm font-medium text-indigo-500 hover:text-indigo-700"
+          >
+            Review skipped items
+          </button>
+        )}
+        <Link to="/dashboard" className="inline-block mt-5 text-sm font-medium text-indigo-500 ml-4">
           View dashboard {"\u2192"}
         </Link>
       </div>
@@ -166,12 +182,14 @@ export function ReviewPage() {
   }
 
   return (
-    <div>
+    <div className="overflow-x-hidden">
       {conflictMessage && (
         <p className="text-center text-amber-600 text-sm font-medium mb-3">
           {conflictMessage}
         </p>
       )}
+
+      <DragIndicators drag={drag.drag} />
 
       <ReviewCard
         ref={cardRef}
