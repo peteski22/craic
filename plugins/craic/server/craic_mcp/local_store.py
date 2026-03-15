@@ -6,6 +6,7 @@ Implements the context manager protocol for deterministic resource cleanup.
 """
 
 import sqlite3
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
@@ -72,7 +73,8 @@ class LocalStore:
     Holds a single persistent connection for the lifetime of the instance.
     Use as a context manager or call ``close()`` explicitly.
 
-    Not thread-safe — each thread should create its own instance.
+    Thread-safe: a lock serialises all connection access so the store
+    can be shared across asyncio.to_thread() executor threads.
     """
 
     def __init__(self, db_path: Path | None = None) -> None:
@@ -83,13 +85,15 @@ class LocalStore:
         """
         self._db_path = db_path or DEFAULT_DB_PATH
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
         self._closed = False
         self._conn = self._open_connection()
         self._ensure_schema()
 
     def _open_connection(self) -> sqlite3.Connection:
         """Open and configure a SQLite connection."""
-        conn = sqlite3.connect(str(self._db_path))
+        # Allow access from asyncio.to_thread() executor threads.
+        conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA synchronous = NORMAL")
@@ -108,10 +112,11 @@ class LocalStore:
 
     def close(self) -> None:
         """Close the underlying database connection."""
-        if self._closed:
-            return
-        self._closed = True
-        self._conn.close()
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            self._conn.close()
 
     def __enter__(self) -> "LocalStore":
         """Enter the context manager."""
@@ -141,25 +146,26 @@ class LocalStore:
             sqlite3.IntegrityError: If a unit with the same ID already exists.
             ValueError: If domain normalisation results in no valid domains.
         """
-        self._check_open()
         domains = _normalise_domains(unit.domain)
         if not domains:
             raise ValueError("At least one non-empty domain is required")
         unit = unit.model_copy(update={"domain": domains})
         data = unit.model_dump_json()
-        with self._conn:
-            self._conn.execute(
-                "INSERT INTO knowledge_units (id, data) VALUES (?, ?)",
-                (unit.id, data),
-            )
-            self._conn.executemany(
-                "INSERT INTO knowledge_unit_domains (unit_id, domain) VALUES (?, ?)",
-                [(unit.id, d) for d in domains],
-            )
-            self._conn.execute(
-                "INSERT INTO knowledge_units_fts (id, summary, detail, action) VALUES (?, ?, ?, ?)",
-                (unit.id, unit.insight.summary, unit.insight.detail, unit.insight.action),
-            )
+        with self._lock:
+            self._check_open()
+            with self._conn:
+                self._conn.execute(
+                    "INSERT INTO knowledge_units (id, data) VALUES (?, ?)",
+                    (unit.id, data),
+                )
+                self._conn.executemany(
+                    "INSERT INTO knowledge_unit_domains (unit_id, domain) VALUES (?, ?)",
+                    [(unit.id, d) for d in domains],
+                )
+                self._conn.execute(
+                    "INSERT INTO knowledge_units_fts (id, summary, detail, action) VALUES (?, ?, ?, ?)",
+                    (unit.id, unit.insight.summary, unit.insight.detail, unit.insight.action),
+                )
 
     def get(self, unit_id: str) -> KnowledgeUnit | None:
         """Retrieve a knowledge unit by ID.
@@ -170,14 +176,49 @@ class LocalStore:
         Returns:
             The knowledge unit, or None if not found.
         """
-        self._check_open()
-        row = self._conn.execute(
-            "SELECT data FROM knowledge_units WHERE id = ?",
-            (unit_id,),
-        ).fetchone()
+        with self._lock:
+            self._check_open()
+            row = self._conn.execute(
+                "SELECT data FROM knowledge_units WHERE id = ?",
+                (unit_id,),
+            ).fetchone()
         if row is None:
             return None
         return KnowledgeUnit.model_validate_json(row[0])
+
+    def all(self) -> list[KnowledgeUnit]:
+        """Return every knowledge unit in the store."""
+        with self._lock:
+            self._check_open()
+            rows = self._conn.execute("SELECT data FROM knowledge_units").fetchall()
+        return [KnowledgeUnit.model_validate_json(row[0]) for row in rows]
+
+    def delete(self, unit_id: str) -> None:
+        """Remove a knowledge unit by ID.
+
+        Args:
+            unit_id: The knowledge unit identifier to delete.
+
+        Raises:
+            KeyError: If no unit with the given ID exists.
+        """
+        with self._lock:
+            self._check_open()
+            with self._conn:
+                cursor = self._conn.execute(
+                    "DELETE FROM knowledge_units WHERE id = ?",
+                    (unit_id,),
+                )
+                if cursor.rowcount == 0:
+                    raise KeyError(f"Knowledge unit not found: {unit_id}")
+                self._conn.execute(
+                    "DELETE FROM knowledge_unit_domains WHERE unit_id = ?",
+                    (unit_id,),
+                )
+                self._conn.execute(
+                    "DELETE FROM knowledge_units_fts WHERE id = ?",
+                    (unit_id,),
+                )
 
     def update(self, unit: KnowledgeUnit) -> None:
         """Replace an existing knowledge unit in the store.
@@ -189,35 +230,36 @@ class LocalStore:
             KeyError: If no unit with the given ID exists.
             ValueError: If domain normalisation results in no valid domains.
         """
-        self._check_open()
         domains = _normalise_domains(unit.domain)
         if not domains:
             raise ValueError("At least one non-empty domain is required")
         unit = unit.model_copy(update={"domain": domains})
         data = unit.model_dump_json()
-        with self._conn:
-            cursor = self._conn.execute(
-                "UPDATE knowledge_units SET data = ? WHERE id = ?",
-                (data, unit.id),
-            )
-            if cursor.rowcount == 0:
-                raise KeyError(f"Knowledge unit not found: {unit.id}")
-            self._conn.execute(
-                "DELETE FROM knowledge_unit_domains WHERE unit_id = ?",
-                (unit.id,),
-            )
-            self._conn.executemany(
-                "INSERT INTO knowledge_unit_domains (unit_id, domain) VALUES (?, ?)",
-                [(unit.id, d) for d in domains],
-            )
-            self._conn.execute(
-                "DELETE FROM knowledge_units_fts WHERE id = ?",
-                (unit.id,),
-            )
-            self._conn.execute(
-                "INSERT INTO knowledge_units_fts (id, summary, detail, action) VALUES (?, ?, ?, ?)",
-                (unit.id, unit.insight.summary, unit.insight.detail, unit.insight.action),
-            )
+        with self._lock:
+            self._check_open()
+            with self._conn:
+                cursor = self._conn.execute(
+                    "UPDATE knowledge_units SET data = ? WHERE id = ?",
+                    (data, unit.id),
+                )
+                if cursor.rowcount == 0:
+                    raise KeyError(f"Knowledge unit not found: {unit.id}")
+                self._conn.execute(
+                    "DELETE FROM knowledge_unit_domains WHERE unit_id = ?",
+                    (unit.id,),
+                )
+                self._conn.executemany(
+                    "INSERT INTO knowledge_unit_domains (unit_id, domain) VALUES (?, ?)",
+                    [(unit.id, d) for d in domains],
+                )
+                self._conn.execute(
+                    "DELETE FROM knowledge_units_fts WHERE id = ?",
+                    (unit.id,),
+                )
+                self._conn.execute(
+                    "INSERT INTO knowledge_units_fts (id, summary, detail, action) VALUES (?, ?, ?, ?)",
+                    (unit.id, unit.insight.summary, unit.insight.detail, unit.insight.action),
+                )
 
     def query(
         self,
@@ -245,7 +287,6 @@ class LocalStore:
         Raises:
             ValueError: If limit is not positive.
         """
-        self._check_open()
         if limit <= 0:
             raise ValueError("limit must be positive")
         if not domains:
@@ -265,8 +306,6 @@ class LocalStore:
                 WHERE domain IN ({placeholders})
             )
         """
-        rows = self._conn.execute(sql, normalised).fetchall()
-
         # Also search FTS5 for units matching query terms in their text.
         fts_terms = " OR ".join(f'"{term}"' for term in normalised)
         fts_sql = """
@@ -275,10 +314,13 @@ class LocalStore:
             JOIN knowledge_units ku ON ku.id = fts.id
             WHERE knowledge_units_fts MATCH ?
         """
-        try:
-            fts_rows = self._conn.execute(fts_sql, (fts_terms,)).fetchall()
-        except sqlite3.OperationalError:
-            fts_rows = []
+        with self._lock:
+            self._check_open()
+            rows = self._conn.execute(sql, normalised).fetchall()
+            try:
+                fts_rows = self._conn.execute(fts_sql, (fts_terms,)).fetchall()
+            except sqlite3.OperationalError:
+                fts_rows = []
 
         # Merge and deduplicate by ID.
         seen: set[str] = set()
@@ -315,18 +357,18 @@ class LocalStore:
         Raises:
             ValueError: If recent_limit is negative.
         """
-        self._check_open()
         if recent_limit < 0:
             raise ValueError("recent_limit must be non-negative")
 
-        total = self._conn.execute("SELECT COUNT(*) FROM knowledge_units").fetchone()[0]
+        with self._lock:
+            self._check_open()
+            total = self._conn.execute("SELECT COUNT(*) FROM knowledge_units").fetchone()[0]
+            domain_rows = self._conn.execute(
+                "SELECT domain, COUNT(*) AS cnt FROM knowledge_unit_domains GROUP BY domain ORDER BY cnt DESC"
+            ).fetchall()
+            all_rows = self._conn.execute("SELECT data FROM knowledge_units").fetchall()
 
-        domain_rows = self._conn.execute(
-            "SELECT domain, COUNT(*) AS cnt FROM knowledge_unit_domains GROUP BY domain ORDER BY cnt DESC"
-        ).fetchall()
         domain_counts = {row[0]: row[1] for row in domain_rows}
-
-        all_rows = self._conn.execute("SELECT data FROM knowledge_units").fetchall()
         units = [KnowledgeUnit.model_validate_json(row[0]) for row in all_rows]
 
         units.sort(
