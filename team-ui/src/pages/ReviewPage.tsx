@@ -15,7 +15,6 @@ export function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
-  const [quickMode, setQuickMode] = useState(false);
   const [conflictMessage, setConflictMessage] = useState<string | null>(null);
 
   const [sessionApproved, setSessionApproved] = useState(0);
@@ -70,13 +69,6 @@ export function ReviewPage() {
     [],
   );
 
-  // Quick mode: auto-confirm after selection.
-  useEffect(() => {
-    if (quickMode && selection && current) {
-      confirmAction();
-    }
-  }, [quickMode, selection]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Keyboard handler.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -96,7 +88,7 @@ export function ReviewPage() {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [current, loading, selection, quickMode, confirmAction]);
+  }, [current, loading, selection, confirmAction]);
 
   if (loading) {
     return (
@@ -131,26 +123,6 @@ export function ReviewPage() {
 
   return (
     <div>
-      <div className={`max-w-xl mx-auto flex justify-end mb-4 items-center gap-2 rounded-lg px-3 py-2 transition-colors ${
-        quickMode ? "bg-amber-50 border border-amber-200" : ""
-      }`}>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <span className={`text-xs ${quickMode ? "text-amber-600 font-medium" : "text-gray-400"}`}>Quick mode</span>
-          <input
-            type="checkbox"
-            checked={quickMode}
-            onChange={(e) => setQuickMode(e.target.checked)}
-            className="sr-only peer"
-          />
-          <div className={`relative w-9 h-5 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all ${
-            quickMode ? "bg-amber-500 after:translate-x-4" : "bg-gray-200"
-          }`} />
-        </label>
-        <span className={`text-xs ${quickMode ? "text-amber-600 font-medium" : "text-gray-400"}`}>
-          Skip confirmation step
-        </span>
-      </div>
-
       {conflictMessage && (
         <p className="text-center text-amber-600 text-sm font-medium mb-3">
           {conflictMessage}
