@@ -1,8 +1,6 @@
-import type { KnowledgeUnit } from "../types";
+import type { KnowledgeUnit, Selection } from "../types";
 import { DomainTags } from "./DomainTags";
 import { timeAgo } from "../utils";
-
-type Selection = "approve" | "reject" | null;
 
 interface Props {
   unit: KnowledgeUnit;
@@ -14,6 +12,7 @@ const CARD_STYLES: Record<string, string> = {
   neutral: "border-gray-200 bg-white",
   approve: "border-green-300 bg-green-50",
   reject: "border-red-300 bg-red-50",
+  skip: "border-slate-400 bg-slate-50",
 };
 
 function confidenceColor(c: number): string {

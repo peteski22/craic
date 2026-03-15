@@ -42,6 +42,8 @@ export interface ReviewQueueResponse {
   limit: number;
 }
 
+export type Selection = "approve" | "reject" | "skip" | null;
+
 export interface ReviewDecisionResponse {
   unit_id: string;
   status: "approved" | "rejected";

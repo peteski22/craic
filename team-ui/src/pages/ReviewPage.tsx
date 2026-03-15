@@ -2,9 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Link, useOutletContext } from "react-router";
 import { api, ApiError } from "../api";
 import { ReviewCard } from "../components/ReviewCard";
-import type { ReviewItem } from "../types";
-
-type Selection = "approve" | "reject" | null;
+import type { ReviewItem, Selection } from "../types";
 
 export function ReviewPage() {
   const { setPendingCount } = useOutletContext<{
