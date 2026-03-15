@@ -183,7 +183,7 @@ export function ReviewPage() {
   }
 
   return (
-    <div className="overflow-x-hidden">
+    <div>
       {conflictMessage && (
         <p className="text-center text-amber-600 text-sm font-medium mb-3">
           {conflictMessage}
