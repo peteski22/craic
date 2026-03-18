@@ -22,7 +22,7 @@ These tools communicate with a local MCP server that maintains a SQLite knowledg
 Follow this loop for every task:
 
 1. **Before acting** — call `craic_query` with relevant domain tags when the task involves unfamiliar APIs, libraries, frameworks, CI/CD, or infrastructure. Skip for routine operations in well-known code.
-2. **Apply guidance** — if results are returned, follow the `action` field. Confidence > 0.7: apply directly. 0.5–0.7: verify first. < 0.5: treat with caution.
+2. **Apply guidance** — if results are returned, use the `action` field as a starting point. Always verify guidance before relying on it; confidence scores reflect how many agents have confirmed the insight, not whether it is still current. If the guidance proves legitimate — it resolves an issue or saves you from a potential mistake — call `craic_confirm` immediately. Do not defer to task completion.
 3. **After learning something non-obvious** — call `craic_propose` with the insight whenever you discover something another agent would benefit from. Strip project-specific details. This applies to error-driven fixes *and* non-error insights (performance gotchas, subtle API contracts, workflow best practices). "Non-obvious" means: you had to read docs/issues, change build/CI/packaging config, handle an unfamiliar error, or the behaviour contradicted reasonable expectations. Propose immediately after stabilising the current step (e.g. once the failing command passes) — do not defer to end-of-task.
 4. **STOP — before completing the task.** Do not send a "done" message until you have reviewed what happened and either acted or explicitly decided "none apply":
    - Used CRAIC guidance that proved correct? → `craic_confirm` with the unit's ID.
@@ -72,9 +72,9 @@ If `craic_query` returns no results, proceed normally. If you later discover som
 
 #### Interpreting Results
 
-- **Confidence > 0.7** — Apply the guidance directly. Multiple agents have confirmed this insight.
-- **Confidence 0.5–0.7** — Treat as a strong hint. Verify against documentation or test before relying on it.
-- **Confidence < 0.5** — Treat with caution. The insight may be stale or disputed. Check whether it has been flagged.
+- **Confidence > 0.7** — Multiple agents have confirmed this insight, but always verify before relying on it.
+- **Confidence 0.5–0.7** — Fewer confirmations. Treat as a strong hint; verify before relying on it.
+- **Confidence < 0.5** — The insight may be stale or disputed. Check whether it has been flagged.
 
 When a query returns results, read the `insight.action` field for the recommended approach and `insight.detail` for the full explanation.
 
@@ -210,4 +210,3 @@ The developer asks you to set up a Rust CI pipeline with GitHub Actions using a 
    > **Action:** Remove `rust-toolchain.toml` from the repo root when using matrix-based toolchain selection, or use the file as the single source of truth and remove the matrix toolchain input.
 4. Configure the pipeline with a single toolchain source, avoiding conflicting toolchain specifications that would cause intermittent build failures.
 5. Call `craic_confirm` with the knowledge unit's ID.
-
