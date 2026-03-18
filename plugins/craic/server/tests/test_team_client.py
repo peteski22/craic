@@ -64,6 +64,12 @@ async def client() -> AsyncIterator[TeamClient]:
     await c.close()
 
 
+class TestTeamClientBaseUrl:
+    def test_base_url_returns_configured_url(self) -> None:
+        client = TeamClient(base_url="http://localhost:8742")
+        assert client.base_url == "http://localhost:8742"
+
+
 class TestTeamClientContextManager:
     async def test_context_manager_closes_client(self) -> None:
         async with TeamClient(base_url="http://localhost:8742") as client:
@@ -91,15 +97,18 @@ class TestTeamClientHealth:
 
 
 class TestTeamClientQuery:
-    async def test_query_returns_none_on_connection_error(
+    async def test_query_returns_error_on_connection_error(
         self,
         client: TeamClient,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(client._client, "get", _raise_connect_error)
-        assert await client.query(["api"]) is None
+        result = await client.query(["api"])
+        assert result.units is None
+        assert result.error is not None
+        assert "Connection refused" in result.error
 
-    async def test_query_returns_none_on_invalid_json(
+    async def test_query_returns_error_on_invalid_json(
         self,
         client: TeamClient,
         monkeypatch: pytest.MonkeyPatch,
@@ -110,7 +119,9 @@ class TestTeamClientQuery:
             request=_MOCK_REQUEST,
         )
         monkeypatch.setattr(client._client, "get", _async_returning(response))
-        assert await client.query(["api"]) is None
+        result = await client.query(["api"])
+        assert result.units is None
+        assert result.error is not None
 
     async def test_query_parses_response(
         self,
@@ -122,9 +133,10 @@ class TestTeamClientQuery:
         monkeypatch.setattr(client._client, "get", _async_returning(response))
 
         result = await client.query(["api"])
-        assert result is not None
-        assert len(result) == 1
-        assert result[0].id == unit.id
+        assert result.units is not None
+        assert result.error is None
+        assert len(result.units) == 1
+        assert result.units[0].id == unit.id
 
 
 class TestTeamClientPropose:

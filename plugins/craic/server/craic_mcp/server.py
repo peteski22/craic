@@ -214,9 +214,9 @@ def _merge_results(
         limit: Maximum results to return.
 
     Returns:
-        Tuple of (serialised results, source indicator). The source
-        reflects whether each store was consulted and returned results,
-        not just whether its results survived deduplication.
+        Tuple of (serialised results, source indicator). Source reflects
+        whether each store was consulted and returned results, not just
+        whether its results survived deduplication.
     """
     if team_units is None:
         return (
@@ -305,21 +305,28 @@ async def craic_query(
         limit=limit,
     )
 
-    team_results = None
+    team_units: list[KnowledgeUnit] | None = None
+    team_status: dict[str, str]
     team_client = _get_team_client()
-    if team_client is not None:
-        team_results = await team_client.query(
+    if team_client is None:
+        team_status = {"status": "not_configured"}
+    else:
+        team_result = await team_client.query(
             cleaned,
             language=language,
             framework=framework,
             limit=limit,
         )
-        if team_results is None:
+        team_units = team_result.units
+        if team_units is None:
             logger.info("Team API unavailable for query; using local results only.")
+            team_status = {"status": "error", "error": team_result.error or "unknown"}
+        else:
+            team_status = {"status": "ok"}
 
     results, source = _merge_results(
         local_results,
-        team_results,
+        team_units,
         query_domains=cleaned,
         query_language=language,
         query_framework=framework,
@@ -328,7 +335,7 @@ async def craic_query(
     for result in results:
         unit_id = result["id"]
         result["action_required"] = f'If you verify this, call craic_confirm(unit_id="{unit_id}").'
-    return {"results": results, "source": source}
+    return {"results": results, "source": source, "team": team_status}
 
 
 @mcp.tool()
@@ -551,22 +558,32 @@ def craic_reflect(session_context: str) -> dict:
 
 @mcp.tool()
 async def craic_status() -> dict:
-    """Return local knowledge store statistics.
+    """Return knowledge store statistics and team API connectivity.
 
     Provides an overview of the local store: total knowledge unit count,
     domain tag breakdown, most recent additions, and confidence score
-    distribution across defined buckets.
+    distribution across defined buckets. Includes team API status.
 
     Returns:
         Dict with ``total_count``, ``domain_counts``, ``recent``
-        (serialised knowledge units), and ``confidence_distribution``.
-        Includes ``promoted_to_team`` when KUs were drained at startup.
+        (serialised knowledge units), ``confidence_distribution``, and
+        ``team`` (connectivity status). Includes ``promoted_to_team``
+        when KUs were drained at startup.
     """
     store = _get_store()
     stats = await asyncio.to_thread(store.stats)
     result = stats.model_dump(mode="json")
     if _drain_promoted_count is not None and _drain_promoted_count > 0:
         result["promoted_to_team"] = _drain_promoted_count
+
+    team_client = _get_team_client()
+    if team_client is None:
+        result["team"] = {"status": "not_configured"}
+    elif await team_client.health():
+        result["team"] = {"status": "ok", "url": team_client.base_url}
+    else:
+        result["team"] = {"status": "unreachable", "url": team_client.base_url}
+
     return result
 
 

@@ -23,7 +23,7 @@ from craic_mcp.server import (
     craic_reflect,
     craic_status,
 )
-from craic_mcp.team_client import TeamRejectedError
+from craic_mcp.team_client import TeamQueryResult, TeamRejectedError
 
 
 @pytest.fixture(autouse=True)
@@ -83,6 +83,7 @@ class TestCraicQuery:
         result = await craic_query(domain=["databases"])
         assert result["results"] == []
         assert result["source"] == "local"
+        assert result["team"] == {"status": "not_configured"}
 
     async def test_query_returns_matching_units(self) -> None:
         await _propose_unit(domain=["databases"])
@@ -158,12 +159,15 @@ class TestCraicQueryWithTeam:
         await _propose_unit(domain=["api"])
         team_unit = _make_team_unit(domain=["api"])
         mock_client = MagicMock()
-        mock_client.query = AsyncMock(return_value=[team_unit])
+        mock_client.query = AsyncMock(
+            return_value=TeamQueryResult(units=[team_unit]),
+        )
         monkeypatch.setattr(server, "_get_team_client", lambda: mock_client)
 
         result = await craic_query(domain=["api"])
         assert len(result["results"]) == 2
         assert result["source"] == "both"
+        assert result["team"] == {"status": "ok"}
 
     async def test_query_deduplicates_by_id(
         self,
@@ -176,7 +180,9 @@ class TestCraicQueryWithTeam:
             domain=["api"],
         )
         mock_client = MagicMock()
-        mock_client.query = AsyncMock(return_value=[duplicate])
+        mock_client.query = AsyncMock(
+            return_value=TeamQueryResult(units=[duplicate]),
+        )
         monkeypatch.setattr(server, "_get_team_client", lambda: mock_client)
 
         result = await craic_query(domain=["api"])
@@ -192,12 +198,15 @@ class TestCraicQueryWithTeam:
     ) -> None:
         team_unit = _make_team_unit(domain=["api"])
         mock_client = MagicMock()
-        mock_client.query = AsyncMock(return_value=[team_unit])
+        mock_client.query = AsyncMock(
+            return_value=TeamQueryResult(units=[team_unit]),
+        )
         monkeypatch.setattr(server, "_get_team_client", lambda: mock_client)
 
         result = await craic_query(domain=["api"])
         assert len(result["results"]) == 1
         assert result["source"] == "team"
+        assert result["team"] == {"status": "ok"}
 
     async def test_query_degrades_when_team_unreachable(
         self,
@@ -205,12 +214,16 @@ class TestCraicQueryWithTeam:
     ) -> None:
         await _propose_unit(domain=["api"])
         mock_client = MagicMock()
-        mock_client.query = AsyncMock(return_value=None)
+        mock_client.query = AsyncMock(
+            return_value=TeamQueryResult(units=None, error="Connection refused"),
+        )
         monkeypatch.setattr(server, "_get_team_client", lambda: mock_client)
 
         result = await craic_query(domain=["api"])
         assert len(result["results"]) == 1
         assert result["source"] == "local"
+        assert result["team"]["status"] == "error"
+        assert "Connection refused" in result["team"]["error"]
 
     async def test_query_respects_limit_across_merged_results(
         self,
@@ -223,7 +236,9 @@ class TestCraicQueryWithTeam:
             _make_team_unit(unit_id="ku_team_2", domain=["api"]),
         ]
         mock_client = MagicMock()
-        mock_client.query = AsyncMock(return_value=team_units)
+        mock_client.query = AsyncMock(
+            return_value=TeamQueryResult(units=team_units),
+        )
         monkeypatch.setattr(server, "_get_team_client", lambda: mock_client)
 
         result = await craic_query(domain=["api"], limit=3)
@@ -318,7 +333,9 @@ class TestCraicProposeWithTeam:
         team_unit = _make_team_unit(unit_id="ku_team_only")
         mock_client = MagicMock()
         mock_client.propose = AsyncMock(return_value=team_unit)
-        mock_client.query = AsyncMock(return_value=[])
+        mock_client.query = AsyncMock(
+            return_value=TeamQueryResult(units=[]),
+        )
         monkeypatch.setattr(server, "_get_team_client", lambda: mock_client)
 
         await _propose_unit(domain=["api"])
@@ -331,7 +348,9 @@ class TestCraicProposeWithTeam:
     ) -> None:
         mock_client = MagicMock()
         mock_client.propose = AsyncMock(side_effect=TeamRejectedError(422, "Invalid domain"))
-        mock_client.query = AsyncMock(return_value=[])
+        mock_client.query = AsyncMock(
+            return_value=TeamQueryResult(units=[]),
+        )
         monkeypatch.setattr(server, "_get_team_client", lambda: mock_client)
 
         result = await _propose_unit(domain=["api"])
@@ -346,7 +365,9 @@ class TestCraicProposeWithTeam:
     ) -> None:
         mock_client = MagicMock()
         mock_client.propose = AsyncMock(return_value=None)
-        mock_client.query = AsyncMock(return_value=[])
+        mock_client.query = AsyncMock(
+            return_value=TeamQueryResult(units=[]),
+        )
         monkeypatch.setattr(server, "_get_team_client", lambda: mock_client)
 
         result = await _propose_unit(domain=["api"])
@@ -698,3 +719,39 @@ class TestCraicStatusWithDrain:
         monkeypatch.setattr(server, "_drain_promoted_count", None)
         result = await craic_status()
         assert "promoted_to_team" not in result
+
+
+class TestCraicStatusTeamField:
+    async def test_status_team_not_configured(self) -> None:
+        result = await craic_status()
+        assert result["team"] == {"status": "not_configured"}
+
+    async def test_status_team_ok(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        mock_client = MagicMock()
+        mock_client.health = AsyncMock(return_value=True)
+        mock_client.base_url = "http://localhost:8742"
+        monkeypatch.setattr(server, "_get_team_client", lambda: mock_client)
+
+        result = await craic_status()
+        assert result["team"] == {
+            "status": "ok",
+            "url": "http://localhost:8742",
+        }
+
+    async def test_status_team_unreachable(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        mock_client = MagicMock()
+        mock_client.health = AsyncMock(return_value=False)
+        mock_client.base_url = "http://localhost:8742"
+        monkeypatch.setattr(server, "_get_team_client", lambda: mock_client)
+
+        result = await craic_status()
+        assert result["team"] == {
+            "status": "unreachable",
+            "url": "http://localhost:8742",
+        }
