@@ -1,9 +1,9 @@
 """HTTP client for the CRAIC Team API.
 
 Wraps all team API endpoints with graceful degradation: connection
-errors, timeouts, malformed responses, and schema mismatches all
-return None instead of raising, so the MCP server can fall back to
-local-only mode.
+errors, timeouts, malformed responses, and schema mismatches return
+structured error context (for query) or None (for other methods)
+instead of raising, so the MCP server can fall back to local-only mode.
 """
 
 import dataclasses
@@ -44,9 +44,11 @@ class TeamRejectedError(Exception):
 class TeamClient:
     """Async HTTP client for the CRAIC Team API.
 
-    All methods return None (or False for health) when the team API is
+    Most methods return None (or False for health) when the team API is
     unreachable or returns an unexpected response, allowing the caller
-    to degrade gracefully.
+    to degrade gracefully. ``query()`` returns a ``TeamQueryResult``
+    with error context instead of None, so callers can surface the
+    failure reason.
 
     Supports the async context manager protocol for resource-safe usage.
     """

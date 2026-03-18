@@ -65,9 +65,9 @@ async def client() -> AsyncIterator[TeamClient]:
 
 
 class TestTeamClientBaseUrl:
-    def test_base_url_returns_configured_url(self) -> None:
-        client = TeamClient(base_url="http://localhost:8742")
-        assert client.base_url == "http://localhost:8742"
+    async def test_base_url_returns_configured_url(self) -> None:
+        async with TeamClient(base_url="http://localhost:8742") as client:
+            assert client.base_url == "http://localhost:8742"
 
 
 class TestTeamClientContextManager:

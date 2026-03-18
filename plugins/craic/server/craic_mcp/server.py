@@ -285,8 +285,10 @@ async def craic_query(
         limit: Maximum results to return.
 
     Returns:
-        Dict with ``results`` (list of knowledge unit dicts) and ``source``
-        ("local", "team", or "both"), or ``error`` if inputs are invalid.
+        Dict with ``results`` (list of knowledge unit dicts), ``source``
+        ("local", "team", or "both"), and ``team`` (connectivity status:
+        "not_configured", "ok", or "error" with message), or ``error``
+        if inputs are invalid.
     """
     cleaned = [d.strip().lower() for d in domain if d.strip()]
     if not cleaned:
