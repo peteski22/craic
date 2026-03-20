@@ -17,6 +17,26 @@ claude plugin marketplace add mozilla-ai/cq
 claude plugin install cq
 ```
 
+Or from a cloned repo:
+
+```bash
+make install-claude
+```
+
+To uninstall:
+
+```
+claude plugin marketplace remove mozilla-ai/cq
+```
+
+Or from a cloned repo:
+
+```bash
+make uninstall-claude
+```
+
+If you configured team sync, you may also want to remove `CQ_TEAM_ADDR` and `CQ_TEAM_API_KEY` from `~/.claude/settings.json`.
+
 ### OpenCode (MCP server)
 
 Also requires: `jq`
@@ -32,6 +52,16 @@ Or for a specific project:
 ```bash
 make install-opencode PROJECT=/path/to/your/project
 ```
+
+To uninstall:
+
+```bash
+make uninstall-opencode
+# or for a specific project:
+make uninstall-opencode PROJECT=/path/to/your/project
+```
+
+If you configured team sync, you may also want to remove the `environment` block from the cq entry in your OpenCode config.
 
 ## Configuration
 

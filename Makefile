@@ -6,11 +6,13 @@ help:
 	@echo ""
 	@echo "Claude Code (recommended):"
 	@echo "  make install-claude                          Install cq plugin"
+	@echo "  make uninstall-claude                        Remove cq plugin"
 	@echo ""
 	@echo "OpenCode:"
 	@echo "  make install-opencode                        Install globally (~/.config/opencode/)"
 	@echo "  make install-opencode PROJECT=/path/to/app   Install into a specific project"
-	@echo "  make uninstall-opencode                      Remove OpenCode install"
+	@echo "  make uninstall-opencode                      Remove global OpenCode install"
+	@echo "  make uninstall-opencode PROJECT=/path/to/app Remove from a specific project"
 	@echo ""
 	@echo "Development:"
 	@echo "  make setup     Install all dependencies"
@@ -35,6 +37,10 @@ setup:
 install-claude:
 	claude plugin marketplace add mozilla-ai/cq
 	claude plugin install cq
+
+.PHONY: uninstall-claude
+uninstall-claude:
+	claude plugin marketplace remove mozilla-ai/cq
 
 .PHONY: install-opencode
 install-opencode:
